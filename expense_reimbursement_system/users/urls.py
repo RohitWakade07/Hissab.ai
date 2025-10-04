@@ -13,6 +13,7 @@ urlpatterns = [
     path('profile/', views.user_profile, name='profile'),
     path('profile/update/', views.update_profile, name='update_profile'),
     path('profile/change-password/', views.change_password, name='change_password'),
+    path('permissions/', views.user_permissions, name='user_permissions'),
     
     # User management endpoints
     path('users/', views.UserListCreateView.as_view(), name='user_list_create'),
@@ -21,10 +22,14 @@ urlpatterns = [
     path('subordinates/', views.subordinates, name='subordinates'),
     
     # Admin management endpoints
-    path('admin/users/', views.admin_list_users, name='admin_list_users'),
+    path('admin/users/', views.admin_users, name='admin_users'),
     path('admin/users/create/', views.admin_create_user, name='admin_create_user'),
     path('admin/users/<uuid:user_id>/update/', views.admin_update_user, name='admin_update_user'),
-    path('admin/users/<uuid:user_id>/assign-manager/', views.admin_assign_manager, name='admin_assign_manager'),
-    path('admin/users/<uuid:user_id>/change-role/', views.admin_change_role, name='admin_change_role'),
-    path('admin/managers/', views.admin_get_managers, name='admin_get_managers'),
+    path('admin/users/<uuid:user_id>/delete/', views.admin_delete_user, name='admin_delete_user'),
+    path('admin/users/<uuid:user_id>/set-role/', views.set_user_role, name='set_user_role'),
+    path('admin/users/<uuid:user_id>/set-approver/', views.set_manager_approver, name='set_manager_approver'),
+    path('admin/users/<uuid:user_id>/assign-manager/', views.assign_manager, name='assign_manager'),
+    
+    # Manager endpoints
+    path('manager/team-users/', views.manager_team_users, name='manager_team_users'),
 ]

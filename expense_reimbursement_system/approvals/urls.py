@@ -20,4 +20,10 @@ urlpatterns = [
     path('create-approval-flow/', views.create_approval_flow, name='create_approval_flow'),
     path('approval-flows-list/', views.approval_flows, name='approval_flows'),
     path('approval-history/<uuid:expense_id>/', views.approval_history, name='approval_history'),
+    
+    # Conditional Approval Flow endpoints
+    path('create-approval-rule/', views.create_approval_rule, name='create_approval_rule'),
+    path('approval-rule-statistics/<uuid:expense_id>/', views.approval_rule_statistics, name='approval_rule_statistics'),
+    path('conditional-approval-rules/', views.conditional_approval_rules, name='conditional_approval_rules'),
+    path('assign-rule-to-flow/', views.assign_rule_to_flow, name='assign_rule_to_flow'),
 ]

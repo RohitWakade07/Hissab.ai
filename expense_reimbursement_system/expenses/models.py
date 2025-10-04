@@ -110,7 +110,7 @@ class Expense(models.Model):
     
     def save(self, *args, **kwargs):
         # Auto-set company from submitted_by user
-        if not self.company and self.submitted_by:
+        if not self.company and self.submitted_by and self.submitted_by.company:
             self.company = self.submitted_by.company
         super().save(*args, **kwargs)
     

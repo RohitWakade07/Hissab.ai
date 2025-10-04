@@ -15,6 +15,10 @@ from .serializers import (
     ExpenseStatsSerializer
 )
 from approvals.models import ExpenseApproval
+from users.permissions import (
+    AdminPermission, ManagerPermission, EmployeePermission,
+    ExpenseAccessPermission, ApprovalPermission
+)
 
 class ExpenseListCreateView(generics.ListCreateAPIView):
     """List and create expenses"""

@@ -1,4 +1,5 @@
 // import { componentStyles } from '../styles/theme';
+import { IconUtils } from '../utils/icons';
 
 export interface ExpenseHistoryProps {
   onClose: () => void;
@@ -342,7 +343,7 @@ export class ExpenseHistory {
         padding: 3rem;
       `;
       emptyState.innerHTML = `
-        <div style="font-size: 3rem; margin-bottom: 1rem;">📄</div>
+        <div style="margin-bottom: 1rem;">${IconUtils.createIconElement('fileText', 48, '#d1d5db').outerHTML}</div>
         <h3 style="margin: 0 0 0.5rem 0; color: var(--text-primary);">No expenses found</h3>
         <p style="margin: 0;">No expenses match the selected status.</p>
       `;
@@ -397,7 +398,7 @@ export class ExpenseHistory {
             ${expense.currency} ${parseFloat(expense.amount).toFixed(2)}
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
-            <span style="font-size: 1.2rem;">${statusIcon}</span>
+            <div style="display: flex; align-items: center;">${IconUtils.createIconElement(statusIcon as any, 16, statusColor).outerHTML}</div>
             <span style="color: ${statusColor}; font-weight: 500; font-size: 0.9rem;">
               ${expense.status_display}
             </span>
@@ -444,13 +445,13 @@ export class ExpenseHistory {
 
   private getStatusIcon(status: string): string {
     const icons: { [key: string]: string } = {
-      'DRAFT': '📝',
-      'PENDING': '⏳',
-      'APPROVED': '✅',
-      'REJECTED': '❌',
-      'PAID': '💰'
+      'DRAFT': 'edit',
+      'PENDING': 'clock',
+      'APPROVED': 'check',
+      'REJECTED': 'x',
+      'PAID': 'dollarSign'
     };
-    return icons[status] || '📄';
+    return icons[status] || 'fileText';
   }
 
   private showError(message: string): void {
@@ -474,3 +475,4 @@ export class ExpenseHistory {
     }
   }
 }
+

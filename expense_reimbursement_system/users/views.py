@@ -14,6 +14,10 @@ from .serializers import (
     AdminCreateUserSerializer,
     AdminUpdateUserSerializer
 )
+from .permissions import (
+    AdminPermission, ManagerPermission, EmployeePermission,
+    permission_required, Permissions, Roles
+)
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -64,6 +68,181 @@ def user_profile(request):
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
 
+@api_view(['GET'])
+@permission_classes([AdminPermission])
+def admin_users(request):
+    """Get all users in company (Admin only)"""
+    users = User.objects.filter(company=request.user.company, is_active=True)
+    serializer = UserSerializer(users, many=True)
+    return Response({
+        'users': serializer.data,
+        'total_count': users.count()
+    })
+
+@api_view(['POST'])
+@permission_classes([AdminPermission])
+def admin_create_user(request):
+    """Create new user (Admin only)"""
+    serializer = AdminCreateUserSerializer(data=request.data)
+    if serializer.is_valid():
+        # Ensure the new user belongs to the same company
+        user_data = serializer.validated_data
+        user_data['company'] = request.user.company
+        
+        user = User.objects.create_user(**user_data)
+        
+        return Response({
+            'message': 'User created successfully',
+            'user': UserSerializer(user).data
+        }, status=status.HTTP_201_CREATED)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([AdminPermission])
+def admin_update_user(request, user_id):
+    """Update user (Admin only)"""
+    try:
+        user = User.objects.get(id=user_id, company=request.user.company)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = AdminUpdateUserSerializer(user, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({
+            'message': 'User updated successfully',
+            'user': UserSerializer(user).data
+        })
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['DELETE'])
+@permission_classes([AdminPermission])
+def admin_delete_user(request, user_id):
+    """Delete user (Admin only)"""
+    try:
+        user = User.objects.get(id=user_id, company=request.user.company)
+        
+        # Prevent admin from deleting themselves
+        if user == request.user:
+            return Response(
+                {'error': 'Cannot delete your own account'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user.is_active = False
+        user.save()
+        
+        return Response({'message': 'User deactivated successfully'})
+    
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['GET'])
+@permission_classes([ManagerPermission])
+def manager_team_users(request):
+    """Get team users (Manager/Admin only)"""
+    if request.user.is_admin():
+        # Admin can see all users in company
+        users = User.objects.filter(company=request.user.company, is_active=True)
+    else:
+        # Manager can see their subordinates
+        users = request.user.get_subordinates()
+    
+    serializer = UserSerializer(users, many=True)
+    return Response({
+        'users': serializer.data,
+        'total_count': users.count()
+    })
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def user_permissions(request):
+    """Get current user permissions"""
+    permissions = request.user.get_permissions()
+    return Response({
+        'permissions': permissions,
+        'role': request.user.role,
+        'can_approve_expenses': request.user.can_approve_expenses(),
+        'is_manager_approver': request.user.is_manager_approver
+    })
+
+@api_view(['POST'])
+@permission_classes([AdminPermission])
+def set_user_role(request, user_id):
+    """Set user role (Admin only)"""
+    try:
+        user = User.objects.get(id=user_id, company=request.user.company)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    new_role = request.data.get('role')
+    if new_role not in ['ADMIN', 'MANAGER', 'EMPLOYEE']:
+        return Response(
+            {'error': 'Invalid role. Must be ADMIN, MANAGER, or EMPLOYEE'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Prevent changing own role
+    if user == request.user:
+        return Response(
+            {'error': 'Cannot change your own role'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    user.role = new_role
+    user.save()
+    
+    return Response({
+        'message': f'User role updated to {new_role}',
+        'user': UserSerializer(user).data
+    })
+
+@api_view(['POST'])
+@permission_classes([AdminPermission])
+def set_manager_approver(request, user_id):
+    """Set manager approver status (Admin only)"""
+    try:
+        user = User.objects.get(id=user_id, company=request.user.company)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    is_approver = request.data.get('is_manager_approver', False)
+    user.is_manager_approver = is_approver
+    user.save()
+    
+    return Response({
+        'message': f'Manager approver status set to {is_approver}',
+        'user': UserSerializer(user).data
+    })
+
+@api_view(['POST'])
+@permission_classes([AdminPermission])
+def assign_manager(request, user_id):
+    """Assign manager to user (Admin only)"""
+    try:
+        user = User.objects.get(id=user_id, company=request.user.company)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    manager_id = request.data.get('manager_id')
+    if manager_id:
+        try:
+            manager = User.objects.get(id=manager_id, company=request.user.company)
+            user.manager = manager
+        except User.DoesNotExist:
+            return Response({'error': 'Manager not found'}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        user.manager = None
+    
+    user.save()
+    
+    return Response({
+        'message': 'Manager assigned successfully',
+        'user': UserSerializer(user).data
+    })
+
 @api_view(['PUT'])
 @permission_classes([permissions.IsAuthenticated])
 def update_profile(request):
@@ -72,8 +251,8 @@ def update_profile(request):
     if serializer.is_valid():
         serializer.save()
         return Response({
-            'user': UserSerializer(request.user).data,
-            'message': 'Profile updated successfully'
+            'message': 'Profile updated successfully',
+            'user': UserSerializer(request.user).data
         })
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -81,248 +260,47 @@ def update_profile(request):
 @permission_classes([permissions.IsAuthenticated])
 def change_password(request):
     """Change user password"""
-    serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+    serializer = ChangePasswordSerializer(data=request.data)
     if serializer.is_valid():
         user = request.user
-        user.set_password(serializer.validated_data['new_password'])
-        user.save()
-        return Response({'message': 'Password changed successfully'})
+        if user.check_password(serializer.validated_data['old_password']):
+            user.set_password(serializer.validated_data['new_password'])
+            user.save()
+            return Response({'message': 'Password changed successfully'})
+        else:
+            return Response(
+                {'error': 'Old password is incorrect'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-class UserListCreateView(generics.ListCreateAPIView):
-    """List and create users (Admin only)"""
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        """Filter users by company"""
-        user = self.request.user
-        if user.is_admin():
-            return User.objects.filter(company=user.company)
-        elif user.is_manager():
-            return User.objects.filter(company=user.company, manager=user)
-        else:
-            return User.objects.filter(id=user.id)
-    
-    def perform_create(self, serializer):
-        """Set company for new user"""
-        serializer.save(company=self.request.user.company)
-
-class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update, or delete user"""
-    queryset = User.objects.all()
-    serializer_class = UserUpdateSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        """Filter users by company"""
-        user = self.request.user
-        if user.is_admin():
-            return User.objects.filter(company=user.company)
-        elif user.is_manager():
-            return User.objects.filter(company=user.company, manager=user)
-        else:
-            return User.objects.filter(id=user.id)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def assign_manager(request, user_id):
-    """Assign manager to user (Admin only)"""
-    if not request.user.is_admin():
-        return Response(
-            {'error': 'Only admins can assign managers'}, 
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    try:
-        user = User.objects.get(id=user_id, company=request.user.company)
-        manager_id = request.data.get('manager_id')
-        
-        if manager_id:
-            manager = User.objects.get(id=manager_id, company=request.user.company)
-            if manager.role not in ['ADMIN', 'MANAGER']:
-                return Response(
-                    {'error': 'Manager must be an Admin or Manager'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            user.manager = manager
-        else:
-            user.manager = None
-        
-        user.save()
-        return Response({
-            'message': 'Manager assigned successfully',
-            'user': UserSerializer(user).data
-        })
-    except User.DoesNotExist:
-        return Response(
-            {'error': 'User not found'}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def subordinates(request):
     """Get user's subordinates"""
-    user = request.user
-    subordinates = user.get_subordinates()
+    subordinates = request.user.get_subordinates()
     serializer = UserSerializer(subordinates, many=True)
-    return Response(serializer.data)
-
-# Admin Management Views
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def admin_create_user(request):
-    """Admin endpoint to create new users"""
-    if not request.user.is_admin():
-        return Response(
-            {'error': 'Only admins can create users'}, 
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    serializer = AdminCreateUserSerializer(data=request.data, context={'request': request})
-    if serializer.is_valid():
-        user = serializer.save()
-        return Response({
-            'user': UserSerializer(user).data,
-            'message': 'User created successfully'
-        }, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-@api_view(['PUT'])
-@permission_classes([permissions.IsAuthenticated])
-def admin_update_user(request, user_id):
-    """Admin endpoint to update user details"""
-    if not request.user.is_admin():
-        return Response(
-            {'error': 'Only admins can update users'}, 
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    try:
-        user = User.objects.get(id=user_id, company=request.user.company)
-    except User.DoesNotExist:
-        return Response(
-            {'error': 'User not found'}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
-    
-    serializer = AdminUpdateUserSerializer(user, data=request.data, context={'request': request})
-    if serializer.is_valid():
-        user = serializer.save()
-        return Response({
-            'user': UserSerializer(user).data,
-            'message': 'User updated successfully'
-        })
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def admin_list_users(request):
-    """Admin endpoint to list all company users"""
-    if not request.user.is_admin():
-        return Response(
-            {'error': 'Only admins can list users'}, 
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    users = User.objects.filter(company=request.user.company).order_by('first_name', 'last_name')
-    serializer = UserSerializer(users, many=True)
-    return Response(serializer.data)
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def admin_get_managers(request):
-    """Get list of potential managers (Admins and Managers)"""
-    if not request.user.is_admin():
-        return Response(
-            {'error': 'Only admins can access this endpoint'}, 
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    managers = User.objects.filter(
-        company=request.user.company,
-        role__in=['ADMIN', 'MANAGER'],
-        is_active=True
-    ).order_by('first_name', 'last_name')
-    
-    serializer = UserSerializer(managers, many=True)
-    return Response(serializer.data)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def admin_assign_manager(request, user_id):
-    """Admin endpoint to assign/change manager for a user"""
-    if not request.user.is_admin():
-        return Response(
-            {'error': 'Only admins can assign managers'}, 
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    try:
-        user = User.objects.get(id=user_id, company=request.user.company)
-    except User.DoesNotExist:
-        return Response(
-            {'error': 'User not found'}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
-    
-    manager_id = request.data.get('manager_id')
-    
-    if manager_id:
-        try:
-            manager = User.objects.get(id=manager_id, company=request.user.company)
-            if manager.role not in ['ADMIN', 'MANAGER']:
-                return Response(
-                    {'error': 'Manager must be an Admin or Manager'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            user.manager = manager
-        except User.DoesNotExist:
-            return Response(
-                {'error': 'Manager not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-    else:
-        user.manager = None
-    
-    user.save()
     return Response({
-        'message': 'Manager assigned successfully',
-        'user': UserSerializer(user).data
+        'subordinates': serializer.data,
+        'count': subordinates.count()
     })
 
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def admin_change_role(request, user_id):
-    """Admin endpoint to change user role"""
-    if not request.user.is_admin():
-        return Response(
-            {'error': 'Only admins can change roles'}, 
-            status=status.HTTP_403_FORBIDDEN
-        )
+# Generic Views
+class UserListCreateView(generics.ListCreateAPIView):
+    """List and create users"""
+    permission_classes = [AdminPermission]
+    serializer_class = UserSerializer
     
-    try:
-        user = User.objects.get(id=user_id, company=request.user.company)
-    except User.DoesNotExist:
-        return Response(
-            {'error': 'User not found'}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
+    def get_queryset(self):
+        return User.objects.filter(company=self.request.user.company, is_active=True)
     
-    new_role = request.data.get('role')
-    if new_role not in ['ADMIN', 'MANAGER', 'EMPLOYEE']:
-        return Response(
-            {'error': 'Invalid role'}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    def perform_create(self, serializer):
+        serializer.save(company=self.request.user.company)
+
+class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update or delete a user"""
+    permission_classes = [AdminPermission]
+    serializer_class = UserSerializer
     
-    user.role = new_role
-    user.save()
-    
-    return Response({
-        'message': 'Role changed successfully',
-        'user': UserSerializer(user).data
-    })
+    def get_queryset(self):
+        return User.objects.filter(company=self.request.user.company, is_active=True)

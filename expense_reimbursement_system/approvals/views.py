@@ -117,7 +117,8 @@ def approve_expense(request, expense_id):
             )
         
         approval_service = ApprovalService()
-        approval_service.process_approval(expense, user, action, comments)
+        # Use conditional approval processing
+        conditional_approved = approval_service.process_conditional_approval(expense, user, action, comments)
         
         # Return updated expense
         serializer = ExpenseSerializer(expense)
@@ -277,5 +278,316 @@ def approval_history(request, expense_id):
     except Expense.DoesNotExist:
         return Response(
             {'error': 'Expense not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_approval_rule(request):
+    """Create a new conditional approval rule (Admin only)"""
+    user = request.user
+    
+    if not user.is_admin():
+        return Response(
+            {'error': 'Only admins can create approval rules'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    rule_type = request.data.get('rule_type')
+    name = request.data.get('name')
+    
+    if not rule_type or not name:
+        return Response(
+            {'error': 'Rule type and name are required'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if rule_type not in ['PERCENTAGE', 'SPECIFIC_APPROVER', 'HYBRID']:
+        return Response(
+            {'error': 'Invalid rule type'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    approval_service = ApprovalService()
+    
+    # Prepare rule data
+    rule_data = {
+        'name': name,
+        'description': request.data.get('description', ''),
+        'min_amount': request.data.get('min_amount'),
+        'max_amount': request.data.get('max_amount'),
+        'percentage_threshold': request.data.get('percentage_threshold'),
+        'specific_approver_id': request.data.get('specific_approver_id')
+    }
+    
+    # Validate specific approver if provided
+    if rule_data['specific_approver_id']:
+        try:
+            specific_approver = user.company.users.get(id=rule_data['specific_approver_id'])
+            rule_data['specific_approver'] = specific_approver
+        except:
+            return Response(
+                {'error': 'Invalid specific approver'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # Create the rule
+    rule = approval_service.create_conditional_approval_rule(
+        company=user.company,
+        rule_type=rule_type,
+        **rule_data
+    )
+    
+    serializer = ApprovalRuleSerializer(rule)
+    return Response({
+        'message': 'Approval rule created successfully',
+        'rule': serializer.data
+    }, status=status.HTTP_201_CREATED)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def approval_rule_statistics(request, expense_id):
+    """Get approval rule statistics for an expense"""
+    try:
+        expense = Expense.objects.get(id=expense_id)
+        
+        # Check if user has permission to view this expense
+        if not (expense.submitted_by == request.user or 
+                request.user.can_approve_expenses() or 
+                request.user.is_admin()):
+            return Response(
+                {'error': 'You do not have permission to view this expense'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        approval_service = ApprovalService()
+        rule_stats = approval_service.get_approval_rule_statistics(expense)
+        
+        return Response({
+            'expense_id': expense_id,
+            'rule_statistics': rule_stats
+        })
+        
+    except Expense.DoesNotExist:
+        return Response(
+            {'error': 'Expense not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def conditional_approval_rules(request):
+    """Get conditional approval rules for company (Admin only)"""
+    user = request.user
+    
+    if not user.is_admin():
+        return Response(
+            {'error': 'Only admins can view approval rules'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    rules = ApprovalRule.objects.filter(
+        company=user.company
+    ).prefetch_related('specific_approver')
+    
+    serializer = ApprovalRuleSerializer(rules, many=True)
+    return Response(serializer.data)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def assign_rule_to_flow(request):
+    """Assign approval rules to an approval flow (Admin only)"""
+    user = request.user
+    
+    if not user.is_admin():
+        return Response(
+            {'error': 'Only admins can assign rules to flows'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    flow_id = request.data.get('flow_id')
+    rule_ids = request.data.get('rule_ids', [])
+    
+    if not flow_id or not rule_ids:
+        return Response(
+            {'error': 'Flow ID and rule IDs are required'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        flow = ApprovalFlow.objects.get(id=flow_id, company=user.company)
+        rules = ApprovalRule.objects.filter(
+            id__in=rule_ids, 
+            company=user.company
+        )
+        
+        # Assign rules to flow
+        flow.approval_rules.set(rules)
+        
+        return Response({
+            'message': f'Assigned {rules.count()} rules to flow',
+            'flow_id': flow_id,
+            'rule_count': rules.count()
+        })
+        
+    except ApprovalFlow.DoesNotExist:
+        return Response(
+            {'error': 'Approval flow not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_approval_rule(request):
+    """Create a new conditional approval rule (Admin only)"""
+    user = request.user
+    
+    if not user.is_admin():
+        return Response(
+            {'error': 'Only admins can create approval rules'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    rule_type = request.data.get('rule_type')
+    name = request.data.get('name')
+    
+    if not rule_type or not name:
+        return Response(
+            {'error': 'Rule type and name are required'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if rule_type not in ['PERCENTAGE', 'SPECIFIC_APPROVER', 'HYBRID']:
+        return Response(
+            {'error': 'Invalid rule type'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    approval_service = ApprovalService()
+    
+    # Prepare rule data
+    rule_data = {
+        'name': name,
+        'description': request.data.get('description', ''),
+        'min_amount': request.data.get('min_amount'),
+        'max_amount': request.data.get('max_amount'),
+        'percentage_threshold': request.data.get('percentage_threshold'),
+        'specific_approver_id': request.data.get('specific_approver_id')
+    }
+    
+    # Validate specific approver if provided
+    if rule_data['specific_approver_id']:
+        try:
+            specific_approver = user.company.users.get(id=rule_data['specific_approver_id'])
+            rule_data['specific_approver'] = specific_approver
+        except:
+            return Response(
+                {'error': 'Invalid specific approver'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # Create the rule
+    rule = approval_service.create_conditional_approval_rule(
+        company=user.company,
+        rule_type=rule_type,
+        **rule_data
+    )
+    
+    serializer = ApprovalRuleSerializer(rule)
+    return Response({
+        'message': 'Approval rule created successfully',
+        'rule': serializer.data
+    }, status=status.HTTP_201_CREATED)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def approval_rule_statistics(request, expense_id):
+    """Get approval rule statistics for an expense"""
+    try:
+        expense = Expense.objects.get(id=expense_id)
+        
+        # Check if user has permission to view this expense
+        if not (expense.submitted_by == request.user or 
+                request.user.can_approve_expenses() or 
+                request.user.is_admin()):
+            return Response(
+                {'error': 'You do not have permission to view this expense'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        approval_service = ApprovalService()
+        rule_stats = approval_service.get_approval_rule_statistics(expense)
+        
+        return Response({
+            'expense_id': expense_id,
+            'rule_statistics': rule_stats
+        })
+        
+    except Expense.DoesNotExist:
+        return Response(
+            {'error': 'Expense not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def conditional_approval_rules(request):
+    """Get conditional approval rules for company (Admin only)"""
+    user = request.user
+    
+    if not user.is_admin():
+        return Response(
+            {'error': 'Only admins can view approval rules'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    rules = ApprovalRule.objects.filter(
+        company=user.company
+    ).prefetch_related('specific_approver')
+    
+    serializer = ApprovalRuleSerializer(rules, many=True)
+    return Response(serializer.data)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def assign_rule_to_flow(request):
+    """Assign approval rules to an approval flow (Admin only)"""
+    user = request.user
+    
+    if not user.is_admin():
+        return Response(
+            {'error': 'Only admins can assign rules to flows'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    flow_id = request.data.get('flow_id')
+    rule_ids = request.data.get('rule_ids', [])
+    
+    if not flow_id or not rule_ids:
+        return Response(
+            {'error': 'Flow ID and rule IDs are required'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        flow = ApprovalFlow.objects.get(id=flow_id, company=user.company)
+        rules = ApprovalRule.objects.filter(
+            id__in=rule_ids, 
+            company=user.company
+        )
+        
+        # Assign rules to flow
+        flow.approval_rules.set(rules)
+        
+        return Response({
+            'message': f'Assigned {rules.count()} rules to flow',
+            'flow_id': flow_id,
+            'rule_count': rules.count()
+        })
+        
+    except ApprovalFlow.DoesNotExist:
+        return Response(
+            {'error': 'Approval flow not found'}, 
             status=status.HTTP_404_NOT_FOUND
         )

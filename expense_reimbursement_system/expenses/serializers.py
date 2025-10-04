@@ -45,8 +45,14 @@ class ExpenseSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         """Create expense with auto-assignment of company and submitted_by"""
-        validated_data['submitted_by'] = self.context['request'].user
-        validated_data['company'] = self.context['request'].user.company
+        user = self.context['request'].user
+        validated_data['submitted_by'] = user
+        
+        # Ensure user has a company
+        if not user.company:
+            raise serializers.ValidationError("User must be associated with a company to create expenses.")
+        
+        validated_data['company'] = user.company
         return super().create(validated_data)
     
     def validate_amount(self, value):
@@ -74,8 +80,14 @@ class ExpenseCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         """Create expense with auto-assignment"""
-        validated_data['submitted_by'] = self.context['request'].user
-        validated_data['company'] = self.context['request'].user.company
+        user = self.context['request'].user
+        validated_data['submitted_by'] = user
+        
+        # Ensure user has a company
+        if not user.company:
+            raise serializers.ValidationError("User must be associated with a company to create expenses.")
+        
+        validated_data['company'] = user.company
         return super().create(validated_data)
 
 class ExpenseUpdateSerializer(serializers.ModelSerializer):

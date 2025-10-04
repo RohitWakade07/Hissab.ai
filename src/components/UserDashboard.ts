@@ -3,6 +3,7 @@ import { AuthUser } from '../services/AuthService';
 import { ExpenseSubmission } from './ExpenseSubmission';
 import { ExpenseHistory } from './ExpenseHistory';
 import { ManagerDashboard } from './ManagerDashboard';
+import { IconUtils } from '../utils/icons';
 
 export interface UserDashboardProps {
   user: AuthUser;
@@ -145,16 +146,16 @@ export class UserDashboard {
 
       // Quick actions card
       const quickActionsCard = this.createCard('Quick Actions', [
-        { title: 'Submit Expense', description: 'Create a new expense claim', icon: '📝', action: 'submit-expense' },
-        { title: 'View Expenses', description: 'Check your expense history', icon: '📊', action: 'view-expenses' },
-        { title: 'Upload Receipt', description: 'Scan receipt with OCR', icon: '📷', action: 'upload-receipt' },
+        { title: 'Submit Expense', description: 'Create a new expense claim', icon: 'dollarSign', action: 'submit-expense' },
+        { title: 'View Expenses', description: 'Check your expense history', icon: 'barChart', action: 'view-expenses' },
+        { title: 'Upload Receipt', description: 'Scan receipt with OCR', icon: 'upload', action: 'upload-receipt' },
       ]);
 
       // Company info card
-      const companyCard = this.createCard('Company Information', [
-        { title: 'Company', description: this.user.company_name, icon: '🏢' },
-        { title: 'Role', description: this.user.get_role_display(), icon: '👤' },
-      ]);
+    const companyCard = this.createCard('Company Information', [
+      { title: 'Company', description: this.user.company_name, icon: 'building' },
+      { title: 'Role', description: this.user.get_role_display(), icon: 'user' },
+    ]);
 
       cardsSection.appendChild(quickActionsCard);
       cardsSection.appendChild(companyCard);
@@ -221,10 +222,9 @@ export class UserDashboard {
         itemDiv.addEventListener('click', () => this.handleAction(item.action!));
       }
 
-      const icon = document.createElement('span');
-      icon.textContent = item.icon;
+      const icon = IconUtils.createIconElement(item.icon as any, 24, '#6366f1');
       icon.style.cssText = `
-        font-size: 1.5rem;
+        flex-shrink: 0;
       `;
 
       const content = document.createElement('div');

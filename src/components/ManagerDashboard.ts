@@ -1,4 +1,6 @@
 import { AuthUser } from '../services/AuthService';
+import { ConditionalApprovalManager } from './ConditionalApprovalManager';
+import { IconUtils } from '../utils/icons';
 
 export interface PendingExpense {
   id: string;
@@ -127,12 +129,12 @@ export class ManagerDashboard {
     `;
 
     if (this.approvalStats) {
-      const statsCards = [
-        { title: 'Pending Approvals', value: this.approvalStats.pending_count, color: '#f59e0b', icon: '⏳' },
-        { title: 'Approved', value: this.approvalStats.approved_count, color: '#10b981', icon: '✅' },
-        { title: 'Rejected', value: this.approvalStats.rejected_count, color: '#ef4444', icon: '❌' },
-        { title: 'Total Processed', value: this.approvalStats.total_processed, color: '#6366f1', icon: '📊' }
-      ];
+    const statsCards = [
+      { title: 'Pending Approvals', value: this.approvalStats.pending_count, color: '#f59e0b', icon: 'clock' },
+      { title: 'Approved', value: this.approvalStats.approved_count, color: '#10b981', icon: 'check' },
+      { title: 'Rejected', value: this.approvalStats.rejected_count, color: '#ef4444', icon: 'x' },
+      { title: 'Total Processed', value: this.approvalStats.total_processed, color: '#6366f1', icon: 'barChart' }
+    ];
 
       statsCards.forEach(stat => {
         const card = this.createStatCard(stat.title, stat.value, stat.color, stat.icon);
@@ -214,9 +216,10 @@ export class ManagerDashboard {
     `;
 
     const actions = [
-      { title: 'View Team Expenses', description: 'See all team expense reports', icon: '👥', action: 'team-expenses' },
-      { title: 'Approval History', description: 'Review past approvals', icon: '📜', action: 'approval-history' },
-      { title: 'Create Approval Flow', description: 'Set up new approval workflows', icon: '⚙️', action: 'create-flow' }
+      { title: 'View Team Expenses', description: 'See all team expense reports', icon: 'users', action: 'team-expenses' },
+      { title: 'Approval History', description: 'Review past approvals', icon: 'fileText', action: 'approval-history' },
+      { title: 'Create Approval Flow', description: 'Set up new approval workflows', icon: 'settings', action: 'create-flow' },
+      { title: 'Conditional Rules', description: 'Manage percentage and specific approver rules', icon: 'zap', action: 'conditional-rules' }
     ];
 
     actions.forEach(action => {
@@ -233,7 +236,7 @@ export class ManagerDashboard {
     this.container.appendChild(actionsSection);
   }
 
-  private createStatCard(title: string, value: number, color: string, icon: string): HTMLElement {
+  private createStatCard(title: string, value: number, color: string, iconName: string): HTMLElement {
     const card = document.createElement('div');
     card.style.cssText = `
       background: white;
@@ -242,12 +245,22 @@ export class ManagerDashboard {
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
       text-align: center;
       border-left: 4px solid ${color};
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     `;
 
-    const iconElement = document.createElement('div');
-    iconElement.textContent = icon;
+    // Add hover effect
+    card.addEventListener('mouseenter', () => {
+      card.style.transform = 'translateY(-2px)';
+      card.style.boxShadow = '0 8px 25px -5px rgba(0, 0, 0, 0.1)';
+    });
+
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = 'translateY(0)';
+      card.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+    });
+
+    const iconElement = IconUtils.createIconElement(iconName as any, 32, color);
     iconElement.style.cssText = `
-      font-size: 2rem;
       margin-bottom: 0.5rem;
     `;
 
@@ -338,35 +351,60 @@ export class ManagerDashboard {
     return card;
   }
 
-  private createActionCard(title: string, description: string, icon: string, action: string): HTMLElement {
+  private createActionCard(title: string, description: string, iconName: string, action: string): HTMLElement {
     const card = document.createElement('div');
     card.style.cssText = `
       background: white;
       border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 1rem;
+      border-radius: 12px;
+      padding: 1.5rem;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
       text-align: center;
+      position: relative;
+      overflow: hidden;
+    `;
+
+    // Add gradient overlay on hover
+    const gradientOverlay = document.createElement('div');
+    gradientOverlay.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 1;
     `;
 
     card.addEventListener('mouseenter', () => {
       card.style.borderColor = '#6366f1';
-      card.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+      card.style.boxShadow = '0 8px 25px -5px rgba(0, 0, 0, 0.1)';
+      card.style.transform = 'translateY(-4px)';
+      gradientOverlay.style.opacity = '0.1';
     });
 
     card.addEventListener('mouseleave', () => {
       card.style.borderColor = '#e5e7eb';
       card.style.boxShadow = 'none';
+      card.style.transform = 'translateY(0)';
+      gradientOverlay.style.opacity = '0';
     });
 
     card.addEventListener('click', () => this.handleAction(action));
 
-    const iconElement = document.createElement('div');
-    iconElement.textContent = icon;
+    const content = document.createElement('div');
+    content.style.cssText = `
+      position: relative;
+      z-index: 2;
+    `;
+
+    const iconElement = IconUtils.createIconElement(iconName as any, 40, '#6366f1');
     iconElement.style.cssText = `
-      font-size: 2rem;
-      margin-bottom: 0.5rem;
+      margin-bottom: 1rem;
+      transition: color 0.3s ease;
     `;
 
     const titleElement = document.createElement('div');
@@ -374,7 +412,8 @@ export class ManagerDashboard {
     titleElement.style.cssText = `
       font-weight: 600;
       color: #1f2937;
-      margin-bottom: 0.25rem;
+      margin-bottom: 0.5rem;
+      font-size: 1.1rem;
     `;
 
     const descElement = document.createElement('div');
@@ -382,11 +421,15 @@ export class ManagerDashboard {
     descElement.style.cssText = `
       color: #6b7280;
       font-size: 0.875rem;
+      line-height: 1.4;
     `;
 
-    card.appendChild(iconElement);
-    card.appendChild(titleElement);
-    card.appendChild(descElement);
+    content.appendChild(iconElement);
+    content.appendChild(titleElement);
+    content.appendChild(descElement);
+
+    card.appendChild(gradientOverlay);
+    card.appendChild(content);
 
     return card;
   }
@@ -432,6 +475,9 @@ export class ManagerDashboard {
       case 'create-flow':
         this.showCreateFlow();
         break;
+      case 'conditional-rules':
+        this.showConditionalRules();
+        break;
       default:
         console.log('Unknown action:', action);
     }
@@ -450,6 +496,63 @@ export class ManagerDashboard {
   private showCreateFlow(): void {
     // TODO: Implement create approval flow view
     alert('Create approval flow view coming soon!');
+  }
+
+  private showConditionalRules(): void {
+    // Show conditional approval manager
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+      background: white;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 1200px;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+    `;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: #ef4444;
+      color: white;
+      border: none;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.2rem;
+      z-index: 1001;
+    `;
+
+    closeBtn.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+
+    modalContent.appendChild(closeBtn);
+    modal.appendChild(modalContent);
+
+    // Initialize conditional approval manager
+    new ConditionalApprovalManager(this.user, modalContent);
+
+    document.body.appendChild(modal);
   }
 
   private showSuccessMessage(message: string): void {

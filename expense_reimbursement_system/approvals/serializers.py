@@ -14,7 +14,9 @@ class ApprovalRuleSerializer(serializers.ModelSerializer):
             'description',
             'rule_type',
             'percentage_threshold',
-            'specific_approvers',
+            'specific_approver',
+            'min_amount',
+            'max_amount',
             'is_active',
             'created_at',
             'updated_at'
