@@ -22,12 +22,12 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    # Temporarily comment out API URLs until views are created
-    # path("api/", include("users.urls")),
-    # path("api/", include("expenses.urls")),
-    # path("api/", include("companies.urls")),
-    # path("api/", include("approvals.urls")),
-    # path("api/", include("ocr.urls")),
+    # API URLs for frontend integration
+    path("api/", include("users.urls")),
+    path("api/", include("expenses.urls")),
+    path("api/", include("companies.urls")),
+    path("api/", include("approvals.urls")),
+    path("api/", include("ocr.urls")),
 ]
 
 # Serve media files in development

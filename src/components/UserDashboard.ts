@@ -1,5 +1,8 @@
 import { componentStyles } from '../styles/theme';
 import { AuthUser } from '../services/AuthService';
+import { ExpenseSubmission } from './ExpenseSubmission';
+import { ExpenseHistory } from './ExpenseHistory';
+import { ManagerDashboard } from './ManagerDashboard';
 
 export interface UserDashboardProps {
   user: AuthUser;
@@ -101,68 +104,65 @@ export class UserDashboard {
     const mainContainer = document.createElement('div');
     mainContainer.className = 'container';
 
-    // Welcome section
-    const welcomeSection = document.createElement('section');
-    welcomeSection.style.cssText = `
-      text-align: center;
-      margin-bottom: 3rem;
-    `;
+    // Check if user is manager or admin - show ManagerDashboard
+    if (this.user.role === 'MANAGER' || this.user.role === 'ADMIN') {
+      new ManagerDashboard(this.user, mainContainer);
+      main.appendChild(mainContainer);
+    } else {
+      // Regular employee dashboard
+      // Welcome section
+      const welcomeSection = document.createElement('section');
+      welcomeSection.style.cssText = `
+        text-align: center;
+        margin-bottom: 3rem;
+      `;
 
-    const welcomeTitle = document.createElement('h1');
-    welcomeTitle.textContent = `Welcome back, ${this.user.first_name}!`;
-    welcomeTitle.style.cssText = `
-      color: var(--text-primary);
-      margin-bottom: 1rem;
-    `;
+      const welcomeTitle = document.createElement('h1');
+      welcomeTitle.textContent = `Welcome back, ${this.user.first_name}!`;
+      welcomeTitle.style.cssText = `
+        color: var(--text-primary);
+        margin-bottom: 1rem;
+      `;
 
-    const welcomeSubtitle = document.createElement('p');
-    welcomeSubtitle.textContent = `You're logged in as ${this.user.get_role_display()} at ${this.user.company.name}`;
-    welcomeSubtitle.style.cssText = `
-      color: var(--text-secondary);
-      font-size: 1.1rem;
-    `;
+      const welcomeSubtitle = document.createElement('p');
+      welcomeSubtitle.textContent = `You're logged in as ${this.user.get_role_display()} at ${this.user.company_name}`;
+      welcomeSubtitle.style.cssText = `
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+      `;
 
-    welcomeSection.appendChild(welcomeTitle);
-    welcomeSection.appendChild(welcomeSubtitle);
+      welcomeSection.appendChild(welcomeTitle);
+      welcomeSection.appendChild(welcomeSubtitle);
 
-    // Dashboard cards
-    const cardsSection = document.createElement('section');
-    cardsSection.style.cssText = `
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 2rem;
-      margin-bottom: 3rem;
-    `;
+      // Dashboard cards
+      const cardsSection = document.createElement('section');
+      cardsSection.style.cssText = `
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin-bottom: 3rem;
+      `;
 
-    // Quick actions card
-    const quickActionsCard = this.createCard('Quick Actions', [
-      { title: 'Submit Expense', description: 'Create a new expense claim', icon: '📝' },
-      { title: 'View Expenses', description: 'Check your expense history', icon: '📊' },
-      { title: 'Upload Receipt', description: 'Scan receipt with OCR', icon: '📷' },
-    ]);
-
-    // Pending approvals card (for managers/admins)
-    if (this.user.role !== 'EMPLOYEE') {
-      const pendingCard = this.createCard('Pending Approvals', [
-        { title: 'Review Expenses', description: 'Approve or reject expenses', icon: '✅' },
-        { title: 'Team Expenses', description: 'View team expense reports', icon: '👥' },
+      // Quick actions card
+      const quickActionsCard = this.createCard('Quick Actions', [
+        { title: 'Submit Expense', description: 'Create a new expense claim', icon: '📝', action: 'submit-expense' },
+        { title: 'View Expenses', description: 'Check your expense history', icon: '📊', action: 'view-expenses' },
+        { title: 'Upload Receipt', description: 'Scan receipt with OCR', icon: '📷', action: 'upload-receipt' },
       ]);
-      cardsSection.appendChild(pendingCard);
+
+      // Company info card
+      const companyCard = this.createCard('Company Information', [
+        { title: 'Company', description: this.user.company_name, icon: '🏢' },
+        { title: 'Role', description: this.user.get_role_display(), icon: '👤' },
+      ]);
+
+      cardsSection.appendChild(quickActionsCard);
+      cardsSection.appendChild(companyCard);
+
+      mainContainer.appendChild(welcomeSection);
+      mainContainer.appendChild(cardsSection);
+      main.appendChild(mainContainer);
     }
-
-    // Company info card
-    const companyCard = this.createCard('Company Information', [
-      { title: 'Company', description: this.user.company.name, icon: '🏢' },
-      { title: 'Currency', description: this.user.company.currency, icon: '💰' },
-      { title: 'Role', description: this.user.get_role_display(), icon: '👤' },
-    ]);
-
-    cardsSection.appendChild(quickActionsCard);
-    cardsSection.appendChild(companyCard);
-
-    mainContainer.appendChild(welcomeSection);
-    mainContainer.appendChild(cardsSection);
-    main.appendChild(mainContainer);
 
     dashboard.appendChild(header);
     dashboard.appendChild(main);
@@ -170,7 +170,7 @@ export class UserDashboard {
     return dashboard;
   }
 
-  private createCard(title: string, items: Array<{ title: string; description: string; icon: string }>): HTMLElement {
+  private createCard(title: string, items: Array<{ title: string; description: string; icon: string; action?: string }>): HTMLElement {
     const card = document.createElement('div');
     card.style.cssText = `
       background-color: var(--background-medium);
@@ -216,6 +216,11 @@ export class UserDashboard {
         itemDiv.style.backgroundColor = 'var(--background-dark)';
       });
 
+      // Add click handler for actions
+      if (item.action) {
+        itemDiv.addEventListener('click', () => this.handleAction(item.action!));
+      }
+
       const icon = document.createElement('span');
       icon.textContent = item.icon;
       icon.style.cssText = `
@@ -255,6 +260,92 @@ export class UserDashboard {
     card.appendChild(itemsList);
 
     return card;
+  }
+
+  private handleAction(action: string): void {
+    switch (action) {
+      case 'submit-expense':
+        this.showExpenseSubmission();
+        break;
+      case 'view-expenses':
+        this.showExpenseHistory();
+        break;
+      case 'upload-receipt':
+        this.showReceiptUpload();
+        break;
+      default:
+        console.log('Unknown action:', action);
+    }
+  }
+
+  private showExpenseSubmission(): void {
+    const expenseSubmission = new ExpenseSubmission({
+      onSuccess: (expense) => {
+        console.log('Expense submitted successfully:', expense);
+        expenseSubmission.destroy();
+        // Show success message or refresh dashboard
+        this.showSuccessMessage('Expense submitted successfully!');
+      },
+      onCancel: () => {
+        expenseSubmission.destroy();
+      }
+    });
+
+    expenseSubmission.render(document.body);
+  }
+
+  private showExpenseHistory(): void {
+    const expenseHistory = new ExpenseHistory({
+      onClose: () => {
+        expenseHistory.destroy();
+      }
+    });
+
+    expenseHistory.render(document.body);
+  }
+
+  private showReceiptUpload(): void {
+    // For now, just show a placeholder message
+    this.showSuccessMessage('Receipt upload feature coming soon!');
+  }
+
+  private showSuccessMessage(message: string): void {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: var(--accent-primary);
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      z-index: 10000;
+      animation: slideIn 0.3s ease;
+    `;
+    notification.textContent = message;
+
+    // Add animation keyframes
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    document.body.appendChild(notification);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+      if (style.parentNode) {
+        style.parentNode.removeChild(style);
+      }
+    }, 3000);
   }
 
   public getElement(): HTMLElement {

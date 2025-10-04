@@ -79,7 +79,6 @@ export class App {
         onLogout: () => this.handleLogout(),
       }),
       hero: new Hero({
-        onLogin: () => this.showLogin(),
         onSignup: () => this.showSignup(),
       }),
       features: new Features(),

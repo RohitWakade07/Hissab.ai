@@ -1,4 +1,4 @@
-import { componentStyles } from '../styles/theme';
+// import { componentStyles } from '../styles/theme';
 import { AuthService, SignupFormData } from '../services/AuthService';
 
 export interface SignupProps {
@@ -90,6 +90,25 @@ export class Signup {
     const passwordGroup = this.createInputGroup('password', 'Password', 'password', true);
     const passwordConfirmGroup = this.createInputGroup('password_confirm', 'Confirm Password', 'password', true);
     const companyGroup = this.createInputGroup('company_name', 'Company Name (Optional)', 'text', false);
+    const countryGroup = this.createSelectGroup('country', 'Country', [
+      { value: 'US', text: 'United States' },
+      { value: 'CA', text: 'Canada' },
+      { value: 'GB', text: 'United Kingdom' },
+      { value: 'AU', text: 'Australia' },
+      { value: 'DE', text: 'Germany' },
+      { value: 'FR', text: 'France' },
+      { value: 'IN', text: 'India' },
+      { value: 'JP', text: 'Japan' }
+    ], 'US');
+    const currencyGroup = this.createSelectGroup('currency', 'Currency', [
+      { value: 'USD', text: 'USD - US Dollar' },
+      { value: 'CAD', text: 'CAD - Canadian Dollar' },
+      { value: 'GBP', text: 'GBP - British Pound' },
+      { value: 'AUD', text: 'AUD - Australian Dollar' },
+      { value: 'EUR', text: 'EUR - Euro' },
+      { value: 'INR', text: 'INR - Indian Rupee' },
+      { value: 'JPY', text: 'JPY - Japanese Yen' }
+    ], 'USD');
     const phoneGroup = this.createInputGroup('phone', 'Phone (Optional)', 'tel', false);
     const departmentGroup = this.createInputGroup('department', 'Department (Optional)', 'text', false);
 
@@ -142,6 +161,8 @@ export class Signup {
     form.appendChild(passwordGroup);
     form.appendChild(passwordConfirmGroup);
     form.appendChild(companyGroup);
+    form.appendChild(countryGroup);
+    form.appendChild(currencyGroup);
     form.appendChild(phoneGroup);
     form.appendChild(departmentGroup);
     form.appendChild(submitButton);
@@ -205,6 +226,57 @@ export class Signup {
     return group;
   }
 
+  private createSelectGroup(name: string, label: string, options: Array<{value: string, text: string}>, defaultValue: string): HTMLElement {
+    const group = document.createElement('div');
+    group.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    `;
+
+    const labelElement = document.createElement('label');
+    labelElement.textContent = label;
+    labelElement.style.cssText = `
+      color: var(--text-primary);
+      font-weight: 500;
+    `;
+
+    const select = document.createElement('select');
+    select.name = name;
+    select.style.cssText = `
+      padding: 0.75rem;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background-color: var(--background-dark);
+      color: var(--text-primary);
+      font-size: 1rem;
+    `;
+
+    // Add options
+    options.forEach(option => {
+      const optionElement = document.createElement('option');
+      optionElement.value = option.value;
+      optionElement.textContent = option.text;
+      if (option.value === defaultValue) {
+        optionElement.selected = true;
+      }
+      select.appendChild(optionElement);
+    });
+
+    select.addEventListener('focus', () => {
+      select.style.borderColor = 'var(--accent-primary)';
+    });
+
+    select.addEventListener('blur', () => {
+      select.style.borderColor = 'var(--border-color)';
+    });
+
+    group.appendChild(labelElement);
+    group.appendChild(select);
+
+    return group;
+  }
+
   private async handleSubmit(form: HTMLFormElement, errorMessage: HTMLElement): Promise<void> {
     const formData = new FormData(form);
     
@@ -227,6 +299,8 @@ export class Signup {
       company_name: formData.get('company_name') as string || undefined,
       phone: formData.get('phone') as string || undefined,
       department: formData.get('department') as string || undefined,
+      country: formData.get('country') as string || 'US',
+      currency: formData.get('currency') as string || 'USD',
     };
 
     // Show loading state

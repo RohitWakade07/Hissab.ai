@@ -158,6 +158,7 @@ class Expense(models.Model):
     
     def move_to_next_approver(self):
         """Move expense to next approver"""
+        from django.utils import timezone
         next_approver = self.get_next_approver()
         if next_approver:
             self.current_approver = next_approver
@@ -165,6 +166,6 @@ class Expense(models.Model):
         else:
             # No more approvers, mark as approved
             self.status = 'APPROVED'
-            self.approved_at = models.DateTimeField(auto_now=True)
+            self.approved_at = timezone.now()
             self.current_approver = None
             self.save()

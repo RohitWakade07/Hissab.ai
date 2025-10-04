@@ -2,18 +2,15 @@ import { componentStyles } from '../styles/theme';
 
 export interface HeroProps {
   className?: string;
-  onLogin?: () => void;
   onSignup?: () => void;
 }
 
 export class Hero {
   private element: HTMLElement;
   private auroraElement: HTMLElement;
-  private onLogin?: () => void;
   private onSignup?: () => void;
 
   constructor(props: HeroProps = {}) {
-    this.onLogin = props.onLogin;
     this.onSignup = props.onSignup;
     this.element = this.createElement(props);
     this.auroraElement = this.createAuroraElement();

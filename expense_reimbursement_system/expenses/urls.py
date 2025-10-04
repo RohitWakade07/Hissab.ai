@@ -12,7 +12,14 @@ urlpatterns = [
     path('expenses/for-approval/', views.expenses_for_approval, name='expenses_for_approval'),
     path('expenses/stats/', views.expense_stats, name='expense_stats'),
     
+    # Employee-specific endpoints
+    path('my-expenses/', views.my_expenses, name='my_expenses'),
+    path('my-expense-history/', views.my_expense_history, name='my_expense_history'),
+    path('my-expense-stats/', views.my_expense_stats, name='my_expense_stats'),
+    path('expenses/<uuid:expense_id>/submit-for-approval/', views.submit_expense_for_approval, name='submit_expense_for_approval'),
+    
     # Category endpoints
     path('categories/', views.ExpenseCategoryListCreateView.as_view(), name='category_list_create'),
     path('categories/<int:pk>/', views.ExpenseCategoryDetailView.as_view(), name='category_detail'),
+    path('expense-categories/', views.expense_categories, name='expense_categories'),
 ]

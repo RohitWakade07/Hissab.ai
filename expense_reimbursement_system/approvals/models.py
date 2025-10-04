@@ -232,9 +232,10 @@ class ExpenseApproval(models.Model):
     
     def approve(self, comments=None):
         """Approve the expense"""
+        from django.utils import timezone
         self.status = 'APPROVED'
         self.comments = comments
-        self.approved_at = models.DateTimeField(auto_now=True)
+        self.approved_at = timezone.now()
         self.save()
     
     def reject(self, comments=None):

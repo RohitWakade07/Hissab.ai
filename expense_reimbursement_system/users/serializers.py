@@ -10,13 +10,15 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True)
     company_name = serializers.CharField(write_only=True, required=False)
+    country = serializers.CharField(write_only=True, required=False, default='US')
+    currency = serializers.CharField(write_only=True, required=False, default='USD')
     
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'password', 'password_confirm', 'phone', 'department',
-            'employee_id', 'company_name'
+            'employee_id', 'company_name', 'country', 'currency'
         ]
         extra_kwargs = {
             'email': {'required': True},
@@ -35,6 +37,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password')
         password_confirm = validated_data.pop('password_confirm')
         company_name = validated_data.pop('company_name', None)
+        country = validated_data.pop('country', 'US')
+        currency = validated_data.pop('currency', 'USD')
         
         # Create or get company
         company = None
@@ -43,8 +47,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                 name=company_name,
                 defaults={
                     'description': f'Company created for {validated_data["first_name"]} {validated_data["last_name"]}',
-                    'currency': 'USD',  # Default currency
-                    'country': 'US',    # Default country
+                    'currency': currency,
+                    'country': country,
                 }
             )
         
@@ -150,3 +154,113 @@ class ChangePasswordSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError('Old password is incorrect.')
         return value
+
+class AdminCreateUserSerializer(serializers.ModelSerializer):
+    """Serializer for admin to create users"""
+    
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    manager_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    
+    class Meta:
+        model = User
+        fields = [
+            'username', 'email', 'first_name', 'last_name', 'password',
+            'phone', 'department', 'employee_id', 'role', 'manager_id',
+            'is_manager_approver', 'is_active'
+        ]
+        extra_kwargs = {
+            'email': {'required': True},
+            'first_name': {'required': True},
+            'last_name': {'required': True},
+        }
+    
+    def validate_manager_id(self, value):
+        """Validate manager assignment"""
+        if value:
+            try:
+                manager = User.objects.get(id=value)
+                if manager.role not in ['ADMIN', 'MANAGER']:
+                    raise serializers.ValidationError('Manager must be an Admin or Manager.')
+                if manager.company != self.context['request'].user.company:
+                    raise serializers.ValidationError('Manager must be from the same company.')
+            except User.DoesNotExist:
+                raise serializers.ValidationError('Manager not found.')
+        return value
+    
+    def validate_role(self, value):
+        """Validate role assignment"""
+        if value not in ['ADMIN', 'MANAGER', 'EMPLOYEE']:
+            raise serializers.ValidationError('Invalid role.')
+        return value
+    
+    def create(self, validated_data):
+        """Create user with company and manager assignment"""
+        manager_id = validated_data.pop('manager_id', None)
+        password = validated_data.pop('password')
+        
+        # Set company to current user's company
+        validated_data['company'] = self.context['request'].user.company
+        
+        # Create user
+        user = User.objects.create_user(
+            password=password,
+            **validated_data
+        )
+        
+        # Assign manager if provided
+        if manager_id:
+            manager = User.objects.get(id=manager_id)
+            user.manager = manager
+            user.save()
+        
+        return user
+
+class AdminUpdateUserSerializer(serializers.ModelSerializer):
+    """Serializer for admin to update users"""
+    
+    manager_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    
+    class Meta:
+        model = User
+        fields = [
+            'first_name', 'last_name', 'email', 'phone', 'department',
+            'employee_id', 'role', 'manager_id', 'is_manager_approver', 'is_active'
+        ]
+    
+    def validate_manager_id(self, value):
+        """Validate manager assignment"""
+        if value:
+            try:
+                manager = User.objects.get(id=value)
+                if manager.role not in ['ADMIN', 'MANAGER']:
+                    raise serializers.ValidationError('Manager must be an Admin or Manager.')
+                if manager.company != self.context['request'].user.company:
+                    raise serializers.ValidationError('Manager must be from the same company.')
+            except User.DoesNotExist:
+                raise serializers.ValidationError('Manager not found.')
+        return value
+    
+    def validate_role(self, value):
+        """Validate role assignment"""
+        if value not in ['ADMIN', 'MANAGER', 'EMPLOYEE']:
+            raise serializers.ValidationError('Invalid role.')
+        return value
+    
+    def update(self, instance, validated_data):
+        """Update user with manager assignment"""
+        manager_id = validated_data.pop('manager_id', None)
+        
+        # Update user fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        # Assign manager if provided
+        if manager_id is not None:
+            if manager_id:
+                manager = User.objects.get(id=manager_id)
+                instance.manager = manager
+            else:
+                instance.manager = None
+        
+        instance.save()
+        return instance

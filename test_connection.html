@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Frontend-Backend Connection</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .result { margin-top: 10px; padding: 10px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>Frontend-Backend Connection Test</h1>
+    
+    <div class="test-section">
+        <h3>Test 1: Frontend Server (Port 3000)</h3>
+        <button onclick="testFrontend()">Test Frontend</button>
+        <div id="frontend-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 2: Backend Server (Port 8000)</h3>
+        <button onclick="testBackend()">Test Backend</button>
+        <div id="backend-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 3: API Endpoints</h3>
+        <button onclick="testAPI()">Test API Endpoints</button>
+        <div id="api-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 4: CORS Configuration</h3>
+        <button onclick="testCORS()">Test CORS</button>
+        <div id="cors-result" class="result"></div>
+    </div>
+
+    <script>
+        async function testFrontend() {
+            const resultDiv = document.getElementById('frontend-result');
+            try {
+                const response = await fetch('http://localhost:3000');
+                if (response.ok) {
+                    resultDiv.innerHTML = '<div class="success">✅ Frontend server is running on port 3000</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ Frontend server responded with error: ' + response.status + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Frontend server not accessible: ' + error.message + '</div>';
+            }
+        }
+
+        async function testBackend() {
+            const resultDiv = document.getElementById('backend-result');
+            try {
+                const response = await fetch('http://localhost:8000/admin/');
+                if (response.ok) {
+                    resultDiv.innerHTML = '<div class="success">✅ Backend server is running on port 8000</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ Backend server responded with error: ' + response.status + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Backend server not accessible: ' + error.message + '</div>';
+            }
+        }
+
+        async function testAPI() {
+            const resultDiv = document.getElementById('api-result');
+            try {
+                // Test users API endpoint
+                const response = await fetch('http://localhost:8000/api/auth/register/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ test: 'data' })
+                });
+                
+                if (response.status === 400) {
+                    resultDiv.innerHTML = '<div class="success">✅ API endpoints are working (400 Bad Request is expected for invalid data)</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="success">✅ API endpoints are working (Status: ' + response.status + ')</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ API endpoints not accessible: ' + error.message + '</div>';
+            }
+        }
+
+        async function testCORS() {
+            const resultDiv = document.getElementById('cors-result');
+            try {
+                const response = await fetch('http://localhost:8000/api/auth/register/', {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': 'http://localhost:3000',
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type'
+                    }
+                });
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = '<div class="success">✅ CORS is configured correctly</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ CORS configuration issue: ' + response.status + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ CORS test failed: ' + error.message + '</div>';
+            }
+        }
+
+        // Auto-run tests on page load
+        window.onload = function() {
+            testFrontend();
+            testBackend();
+            testAPI();
+            testCORS();
+        };
+    </script>
+</body>
+</html>

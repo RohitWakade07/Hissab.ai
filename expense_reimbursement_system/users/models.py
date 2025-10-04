@@ -94,3 +94,26 @@ class User(AbstractUser):
         return Expense.objects.filter(
             submitted_by__in=subordinates
         ).order_by('-created_at')
+    
+    @classmethod
+    def create_user(cls, username, email, password, first_name, last_name, company=None, role='EMPLOYEE', **extra_fields):
+        """Create a new user with the given details"""
+        if not username:
+            raise ValueError('The username must be set')
+        if not email:
+            raise ValueError('The email must be set')
+        if not password:
+            raise ValueError('The password must be set')
+        
+        user = cls(
+            username=username,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            company=company,
+            role=role,
+            **extra_fields
+        )
+        user.set_password(password)
+        user.save(using=cls._default_manager.db)
+        return user

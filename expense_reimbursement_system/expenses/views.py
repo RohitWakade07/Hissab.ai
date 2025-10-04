@@ -288,3 +288,200 @@ class ExpenseCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = ExpenseCategory.objects.all()
     serializer_class = ExpenseCategorySerializer
     permission_classes = [permissions.IsAuthenticated]
+
+# Employee-specific endpoints
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def my_expenses(request):
+    """Get current user's expenses with filtering"""
+    user = request.user
+    
+    # Get query parameters for filtering
+    status_filter = request.query_params.get('status')
+    category_filter = request.query_params.get('category')
+    currency_filter = request.query_params.get('currency')
+    start_date = request.query_params.get('start_date')
+    end_date = request.query_params.get('end_date')
+    
+    # Base queryset - only user's own expenses
+    queryset = Expense.objects.filter(submitted_by=user).select_related('category', 'current_approver')
+    
+    # Apply filters
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
+    if category_filter:
+        queryset = queryset.filter(category_id=category_filter)
+    if currency_filter:
+        queryset = queryset.filter(currency=currency_filter)
+    if start_date:
+        queryset = queryset.filter(expense_date__gte=start_date)
+    if end_date:
+        queryset = queryset.filter(expense_date__lte=end_date)
+    
+    # Order by creation date (newest first)
+    queryset = queryset.order_by('-created_at')
+    
+    serializer = ExpenseSerializer(queryset, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def my_expense_history(request):
+    """Get current user's expense history with status breakdown"""
+    user = request.user
+    
+    # Get all user's expenses
+    all_expenses = Expense.objects.filter(submitted_by=user).select_related('category', 'current_approver')
+    
+    # Group by status
+    status_groups = {
+        'DRAFT': all_expenses.filter(status='DRAFT'),
+        'PENDING': all_expenses.filter(status='PENDING'),
+        'APPROVED': all_expenses.filter(status='APPROVED'),
+        'REJECTED': all_expenses.filter(status='REJECTED'),
+        'PAID': all_expenses.filter(status='PAID'),
+    }
+    
+    # Calculate totals for each status
+    result = {}
+    for status, expenses in status_groups.items():
+        expenses_list = expenses.order_by('-created_at')
+        total_amount = sum(float(exp.amount) for exp in expenses_list)
+        
+        result[status.lower()] = {
+            'count': expenses_list.count(),
+            'total_amount': total_amount,
+            'expenses': ExpenseSerializer(expenses_list, many=True).data
+        }
+    
+    # Add overall statistics
+    result['summary'] = {
+        'total_expenses': all_expenses.count(),
+        'total_amount': sum(float(exp.amount) for exp in all_expenses),
+        'pending_count': status_groups['PENDING'].count(),
+        'approved_count': status_groups['APPROVED'].count(),
+        'rejected_count': status_groups['REJECTED'].count(),
+    }
+    
+    return Response(result)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def submit_expense_for_approval(request, expense_id):
+    """Submit a draft expense for approval"""
+    try:
+        expense = Expense.objects.get(id=expense_id, submitted_by=request.user)
+        
+        if expense.status != 'DRAFT':
+            return Response(
+                {'error': 'Only draft expenses can be submitted for approval'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate required fields
+        if not expense.amount or not expense.category or not expense.description or not expense.expense_date:
+            return Response(
+                {'error': 'Please fill in all required fields before submitting'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Set status to pending and submitted timestamp
+        expense.status = 'PENDING'
+        expense.submitted_at = timezone.now()
+        
+        # Use approval service to determine flow and assign approver
+        from approvals.services import ApprovalService
+        approval_service = ApprovalService()
+        
+        # Get or create approval flow for this expense
+        approval_flow = approval_service.get_approval_flow_for_expense(expense)
+        expense.approval_flow = approval_flow
+        
+        # Determine first approver based on IS_MANAGER_APPROVER field
+        first_approver = None
+        
+        # Check if user has a manager and manager can approve expenses
+        if request.user.manager and request.user.manager.can_approve_expenses():
+            first_approver = request.user.manager
+        else:
+            # If no manager or manager can't approve, assign to company admin
+            admin_users = User.objects.filter(company=request.user.company, role='ADMIN', is_active=True)
+            if admin_users.exists():
+                first_approver = admin_users.first()
+        
+        # Assign expense to first approver
+        if first_approver:
+            approval_service.assign_expense_to_approver(expense, first_approver)
+        
+        return Response({
+            'message': 'Expense submitted for approval successfully',
+            'expense': ExpenseSerializer(expense).data
+        })
+        
+    except Expense.DoesNotExist:
+        return Response(
+            {'error': 'Expense not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def expense_categories(request):
+    """Get available expense categories"""
+    categories = ExpenseCategory.objects.filter(is_active=True).order_by('name')
+    serializer = ExpenseCategorySerializer(categories, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def my_expense_stats(request):
+    """Get current user's expense statistics"""
+    user = request.user
+    expenses = Expense.objects.filter(submitted_by=user)
+    
+    # Calculate statistics
+    total_expenses = expenses.count()
+    total_amount = sum(float(exp.amount) for exp in expenses)
+    
+    # Status breakdown
+    status_counts = {}
+    status_amounts = {}
+    for status, _ in Expense.STATUS_CHOICES:
+        status_expenses = expenses.filter(status=status)
+        status_counts[status] = status_expenses.count()
+        status_amounts[status] = sum(float(exp.amount) for exp in status_expenses)
+    
+    # Category breakdown
+    category_breakdown = {}
+    for expense in expenses.select_related('category'):
+        category_name = expense.category.name
+        if category_name not in category_breakdown:
+            category_breakdown[category_name] = {'count': 0, 'amount': 0}
+        category_breakdown[category_name]['count'] += 1
+        category_breakdown[category_name]['amount'] += float(expense.amount)
+    
+    # Monthly breakdown (last 6 months)
+    monthly_breakdown = {}
+    for i in range(6):
+        month_date = timezone.now().date().replace(day=1) - timedelta(days=30*i)
+        month_expenses = expenses.filter(
+            expense_date__year=month_date.year,
+            expense_date__month=month_date.month
+        )
+        month_key = month_date.strftime('%Y-%m')
+        monthly_breakdown[month_key] = {
+            'count': month_expenses.count(),
+            'amount': sum(float(exp.amount) for exp in month_expenses)
+        }
+    
+    return Response({
+        'total_expenses': total_expenses,
+        'total_amount': total_amount,
+        'status_breakdown': {
+            'counts': status_counts,
+            'amounts': status_amounts
+        },
+        'category_breakdown': category_breakdown,
+        'monthly_breakdown': monthly_breakdown
+    })

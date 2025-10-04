@@ -1,4 +1,4 @@
-import { componentStyles } from '../styles/theme';
+// import { componentStyles } from '../styles/theme';
 
 export interface LoginFormData {
   username: string;
@@ -15,6 +15,8 @@ export interface SignupFormData {
   company_name?: string;
   phone?: string;
   department?: string;
+  country?: string;
+  currency?: string;
 }
 
 export interface AuthUser {
@@ -24,12 +26,10 @@ export interface AuthUser {
   first_name: string;
   last_name: string;
   role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
-  company: {
-    id: string;
-    name: string;
-    currency: string;
-  };
+  company: string; // Company ID
+  company_name: string; // Company name
   is_active: boolean;
+  get_role_display(): string;
 }
 
 export class AuthService {
@@ -52,12 +52,38 @@ export class AuthService {
 
   private getStoredUser(): AuthUser | null {
     const userStr = localStorage.getItem('auth_user');
-    return userStr ? JSON.parse(userStr) : null;
+    if (!userStr) return null;
+    
+    const user = JSON.parse(userStr);
+    // Add the get_role_display method to the user object
+    return {
+      ...user,
+      get_role_display(): string {
+        const roleMap: { [key: string]: string } = {
+          'ADMIN': 'Administrator',
+          'MANAGER': 'Manager',
+          'EMPLOYEE': 'Employee'
+        };
+        return roleMap[this.role] || this.role;
+      }
+    };
   }
 
   private storeAuth(token: string, user: AuthUser): void {
     this.token = token;
-    this.user = user;
+    // Add the get_role_display method to the user object
+    const userWithMethods = {
+      ...user,
+      get_role_display(): string {
+        const roleMap: { [key: string]: string } = {
+          'ADMIN': 'Administrator',
+          'MANAGER': 'Manager',
+          'EMPLOYEE': 'Employee'
+        };
+        return roleMap[this.role] || this.role;
+      }
+    };
+    this.user = userWithMethods;
     localStorage.setItem('auth_token', token);
     localStorage.setItem('auth_user', JSON.stringify(user));
   }
@@ -156,7 +182,19 @@ export class AuthService {
 
       if (response.ok) {
         const user = await response.json();
-        this.user = user;
+        // Add the get_role_display method to the user object
+        const userWithMethods = {
+          ...user,
+          get_role_display(): string {
+            const roleMap: { [key: string]: string } = {
+              'ADMIN': 'Administrator',
+              'MANAGER': 'Manager',
+              'EMPLOYEE': 'Employee'
+            };
+            return roleMap[this.role] || this.role;
+          }
+        };
+        this.user = userWithMethods;
         localStorage.setItem('auth_user', JSON.stringify(user));
       }
     } catch (error) {
