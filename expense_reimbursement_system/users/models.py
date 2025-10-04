@@ -7,6 +7,7 @@ class User(AbstractUser):
     """Extended User model with company and role information"""
     
     ROLE_CHOICES = [
+        ('SUPER_USER', 'Super User'),
         ('ADMIN', 'Admin'),
         ('MANAGER', 'Manager'),
         ('EMPLOYEE', 'Employee'),
@@ -59,6 +60,10 @@ class User(AbstractUser):
         full_name = f"{self.first_name} {self.last_name}"
         return full_name.strip() or self.username
     
+    def is_super_user(self):
+        """Check if user is a super user"""
+        return self.role == 'SUPER_USER'
+    
     def is_admin(self):
         """Check if user is an admin"""
         return self.role == 'ADMIN'
@@ -73,28 +78,41 @@ class User(AbstractUser):
     
     def can_approve_expenses(self):
         """Check if user can approve expenses"""
-        return self.role in ['ADMIN', 'MANAGER']
+        return self.role in ['SUPER_USER', 'ADMIN', 'MANAGER']
+    
+    # ===== SUPER USER PERMISSIONS =====
+    def can_create_company(self):
+        """Super user can create companies"""
+        return self.is_super_user()
+    
+    def can_manage_companies(self):
+        """Super user can manage all companies"""
+        return self.is_super_user()
+    
+    def can_manage_all_users(self):
+        """Super user can manage users across all companies"""
+        return self.is_super_user()
+    
+    def can_set_any_role(self):
+        """Super user can set any role including SUPER_USER"""
+        return self.is_super_user()
     
     # ===== ADMIN PERMISSIONS =====
-    def can_create_company(self):
-        """Admin can create company (auto on signup)"""
-        return self.is_admin()
-    
     def can_manage_users(self):
-        """Admin can manage users"""
-        return self.is_admin()
+        """Admin can manage users in their company"""
+        return self.is_admin() or self.is_super_user()
     
     def can_set_roles(self):
-        """Admin can set and change user roles"""
-        return self.is_admin()
+        """Admin can set and change user roles (except SUPER_USER)"""
+        return self.is_admin() or self.is_super_user()
     
     def can_configure_approval_rules(self):
         """Admin can configure approval rules and flows"""
-        return self.is_admin()
+        return self.is_admin() or self.is_super_user()
     
     def can_view_all_expenses(self):
         """Admin can view all expenses in the company"""
-        return self.is_admin()
+        return self.is_admin() or self.is_super_user()
     
     def can_override_approvals(self):
         """Admin can override any approval decision"""

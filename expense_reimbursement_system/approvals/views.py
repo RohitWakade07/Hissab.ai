@@ -281,6 +281,101 @@ def approval_history(request, expense_id):
             status=status.HTTP_404_NOT_FOUND
         )
 
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def general_approval_history(request):
+    """Get general approval history for managers/admins"""
+    user = request.user
+    
+    if not user.can_approve_expenses():
+        return Response(
+            {'error': 'You do not have permission to view approval history'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Get all approvals made by this user or in their company
+    approvals = ExpenseApproval.objects.filter(
+        Q(approver=user) | Q(expense__company=user.company)
+    ).select_related('expense', 'expense__submitted_by', 'approver').order_by('-created_at')
+    
+    # Limit to recent approvals (last 100)
+    approvals = approvals[:100]
+    
+    serializer = ExpenseApprovalSerializer(approvals, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def conditional_approval_rules(request):
+    """Get conditional approval rules and logic"""
+    try:
+        from .conditional_service import ConditionalApprovalService
+        conditional_service = ConditionalApprovalService()
+        rules_summary = conditional_service.get_approval_rules_summary()
+        
+        return Response({
+            'success': True,
+            'rules_summary': rules_summary,
+            'message': 'Conditional approval rules loaded successfully'
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': 'Failed to load conditional approval rules',
+            'fallback_rules': {
+                'auto_approve': '≤ ₹5,000',
+                'department_manager': '₹5,001 - ₹25,000',
+                'finance_head': '₹25,001 - ₹1,00,000',
+                'managing_director': '> ₹1,00,000'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def test_conditional_approval(request):
+    """Test conditional approval logic for a given expense"""
+    try:
+        from .conditional_service import ConditionalApprovalService
+        from expenses.models import Expense
+        
+        expense_id = request.data.get('expense_id')
+        if not expense_id:
+            return Response(
+                {'error': 'expense_id is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            expense = Expense.objects.get(id=expense_id)
+        except Expense.DoesNotExist:
+            return Response(
+                {'error': 'Expense not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        conditional_service = ConditionalApprovalService()
+        approval_info = conditional_service.determine_approval_requirements(expense)
+        
+        return Response({
+            'success': True,
+            'expense_id': expense_id,
+            'approval_info': approval_info,
+            'expense_details': {
+                'amount': str(expense.amount),
+                'currency': expense.currency,
+                'category': expense.category.name if expense.category else 'No category',
+                'description': expense.description,
+                'merchant_name': expense.merchant_name
+            }
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'Failed to test conditional approval: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def create_approval_rule(request):

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple EasyOCR Image Uploader</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; line-height: 1.6; background-color: #f4f7f6; color: #333; }
+        .container { max-width: 600px; margin: 40px auto; padding: 30px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
+        form { display: flex; flex-direction: column; align-items: center; }
+        .form-control-file { margin-top: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; width: 100%; max-width: 300px; box-sizing: border-box; }
+        button[type="submit"] {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 25px;
+            font-size: 1.1em;
+            transition: background-color 0.3s ease;
+        }
+        button[type="submit"]:hover { background-color: #0056b3; }
+        .errorlist { color: #e74c3c; list-style-type: none; padding: 0; margin-top: 10px; text-align: center; }
+        p { text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload an Image for OCR</h1>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit">Upload and Process</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -69,9 +69,9 @@ def user_profile(request):
     return Response(serializer.data)
 
 @api_view(['GET'])
-@permission_classes([AdminPermission])
+@permission_classes([ManagerPermission])
 def admin_users(request):
-    """Get all users in company (Admin only)"""
+    """Get all users in company (Admin and Manager)"""
     users = User.objects.filter(company=request.user.company, is_active=True)
     serializer = UserSerializer(users, many=True)
     return Response({
@@ -80,10 +80,10 @@ def admin_users(request):
     })
 
 @api_view(['POST'])
-@permission_classes([AdminPermission])
+@permission_classes([ManagerPermission])
 def admin_create_user(request):
-    """Create new user (Admin only)"""
-    serializer = AdminCreateUserSerializer(data=request.data)
+    """Create new user (Admin and Manager)"""
+    serializer = AdminCreateUserSerializer(data=request.data, context={'request': request})
     if serializer.is_valid():
         # Ensure the new user belongs to the same company
         user_data = serializer.validated_data
@@ -99,15 +99,15 @@ def admin_create_user(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['PUT', 'PATCH'])
-@permission_classes([AdminPermission])
+@permission_classes([ManagerPermission])
 def admin_update_user(request, user_id):
-    """Update user (Admin only)"""
+    """Update user (Admin and Manager)"""
     try:
         user = User.objects.get(id=user_id, company=request.user.company)
     except User.DoesNotExist:
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    serializer = AdminUpdateUserSerializer(user, data=request.data, partial=True)
+    serializer = AdminUpdateUserSerializer(user, data=request.data, partial=True, context={'request': request})
     if serializer.is_valid():
         serializer.save()
         return Response({

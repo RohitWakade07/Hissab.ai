@@ -3,6 +3,7 @@ import { AuthUser } from '../services/AuthService';
 import { ExpenseSubmission } from './ExpenseSubmission';
 import { ExpenseHistory } from './ExpenseHistory';
 import { ManagerDashboard } from './ManagerDashboard';
+import { SuperUserDashboard } from './SuperUserDashboard';
 import { IconUtils } from '../utils/icons';
 
 export interface UserDashboardProps {
@@ -105,8 +106,11 @@ export class UserDashboard {
     const mainContainer = document.createElement('div');
     mainContainer.className = 'container';
 
-    // Check if user is manager or admin - show ManagerDashboard
-    if (this.user.role === 'MANAGER' || this.user.role === 'ADMIN') {
+    // Check user role and show appropriate dashboard
+    if (this.user.role === 'SUPER_USER') {
+      new SuperUserDashboard(this.user, mainContainer);
+      main.appendChild(mainContainer);
+    } else if (this.user.role === 'MANAGER' || this.user.role === 'ADMIN') {
       new ManagerDashboard(this.user, mainContainer);
       main.appendChild(mainContainer);
     } else {
@@ -130,10 +134,80 @@ export class UserDashboard {
       welcomeSubtitle.style.cssText = `
         color: var(--text-secondary);
         font-size: 1.1rem;
+        margin-bottom: 1rem;
       `;
+
+      // Company ID Display
+      const companyIdSection = document.createElement('div');
+      companyIdSection.style.cssText = `
+        background: var(--background-medium);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem auto;
+        max-width: 500px;
+        text-align: left;
+      `;
+
+      const companyIdLabel = document.createElement('div');
+      companyIdLabel.textContent = 'Company ID:';
+      companyIdLabel.style.cssText = `
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+      `;
+
+      const companyIdDisplay = document.createElement('div');
+      companyIdDisplay.style.cssText = `
+        background: var(--background-dark);
+        padding: 0.75rem;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 0.9rem;
+        color: var(--text-primary);
+        word-break: break-all;
+        border: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      `;
+
+      const companyIdText = document.createElement('span');
+      companyIdText.textContent = this.user.company || 'No company assigned';
+
+      const copyButton = document.createElement('button');
+      copyButton.textContent = 'Copy';
+      copyButton.style.cssText = `
+        background: var(--accent-primary);
+        color: white;
+        border: none;
+        padding: 0.4rem 0.8rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        margin-left: 1rem;
+        flex-shrink: 0;
+      `;
+      copyButton.addEventListener('click', () => {
+        if (this.user.company) {
+          navigator.clipboard.writeText(this.user.company);
+          copyButton.textContent = 'Copied!';
+          setTimeout(() => {
+            copyButton.textContent = 'Copy';
+          }, 2000);
+        }
+      });
+
+      companyIdDisplay.appendChild(companyIdText);
+      companyIdDisplay.appendChild(copyButton);
+      companyIdSection.appendChild(companyIdLabel);
+      companyIdSection.appendChild(companyIdDisplay);
 
       welcomeSection.appendChild(welcomeTitle);
       welcomeSection.appendChild(welcomeSubtitle);
+      welcomeSection.appendChild(companyIdSection);
 
       // Dashboard cards
       const cardsSection = document.createElement('section');

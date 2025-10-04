@@ -3,6 +3,7 @@
 export interface LoginFormData {
   username: string;
   password: string;
+  company_id: string;
 }
 
 export interface SignupFormData {
@@ -25,7 +26,7 @@ export interface AuthUser {
   email: string;
   first_name: string;
   last_name: string;
-  role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+  role: 'SUPER_USER' | 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
   company: string; // Company ID
   company_name: string; // Company name
   is_active: boolean;
@@ -60,6 +61,7 @@ export class AuthService {
       ...user,
       get_role_display(): string {
         const roleMap: { [key: string]: string } = {
+          'SUPER_USER': 'Super User',
           'ADMIN': 'Administrator',
           'MANAGER': 'Manager',
           'EMPLOYEE': 'Employee'
@@ -76,6 +78,7 @@ export class AuthService {
       ...user,
       get_role_display(): string {
         const roleMap: { [key: string]: string } = {
+          'SUPER_USER': 'Super User',
           'ADMIN': 'Administrator',
           'MANAGER': 'Manager',
           'EMPLOYEE': 'Employee'

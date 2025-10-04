@@ -163,6 +163,11 @@ export class ExpenseSubmission {
       await this.handleSubmit(form, errorMessage);
     });
 
+    // Load categories after form is fully constructed
+    setTimeout(() => {
+      this.loadCategories(categoryGroup);
+    }, 100);
+
     return modal;
   }
 
@@ -425,6 +430,13 @@ export class ExpenseSubmission {
       return;
     }
 
+    // Validate category
+    const categoryValue = parseInt(category);
+    if (isNaN(categoryValue) || categoryValue <= 0) {
+      this.showError(errorMessage, 'Please select a valid category');
+      return;
+    }
+
     // Show loading state
     const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     const originalText = submitButton.textContent;
@@ -433,26 +445,134 @@ export class ExpenseSubmission {
 
     try {
       const token = localStorage.getItem('auth_token');
+      
+      // Convert FormData to JSON
+      const expenseData = {
+        amount: amount,
+        currency: 'USD',
+        category: parseInt(category),
+        description: description,
+        expense_date: expenseDate,
+        merchant_name: formData.get('merchant_name') as string || '',
+      };
+      
+      // Debug logging
+      console.log('Expense data being sent:', expenseData);
+      console.log('Category value:', category, 'Parsed:', parseInt(category));
+      
       const response = await fetch('http://localhost:8000/api/expenses/', {
         method: 'POST',
         headers: {
           'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
         },
-        body: formData,
+        body: JSON.stringify(expenseData),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('Failed to parse response as JSON:', jsonError);
+        this.showError(errorMessage, `Server error (${response.status}): Invalid response format`);
+        return;
+      }
 
       if (response.ok) {
         this.onSubmit(data);
       } else {
-        this.showError(errorMessage, data.error || 'Failed to submit expense');
+        console.error('Expense submission failed:', response.status, data);
+        
+        // Handle different types of error responses
+        let errorMsg = 'Failed to submit expense';
+        
+        if (data.error) {
+          errorMsg = data.error;
+        } else if (data.detail) {
+          errorMsg = data.detail;
+        } else if (data.message) {
+          errorMsg = data.message;
+        } else if (typeof data === 'object') {
+          // Handle validation errors (field-specific errors)
+          const fieldErrors = [];
+          for (const [field, errors] of Object.entries(data)) {
+            if (Array.isArray(errors)) {
+              fieldErrors.push(`${field}: ${errors.join(', ')}`);
+            } else if (typeof errors === 'string') {
+              fieldErrors.push(`${field}: ${errors}`);
+            }
+          }
+          if (fieldErrors.length > 0) {
+            errorMsg = fieldErrors.join('; ');
+          }
+        }
+        
+        this.showError(errorMessage, errorMsg);
       }
     } catch (error) {
       this.showError(errorMessage, 'Network error. Please try again.');
     } finally {
       submitButton.textContent = originalText;
       submitButton.disabled = false;
+    }
+  }
+
+  private async loadCategories(categoryGroup: HTMLElement): Promise<void> {
+    try {
+      // Validate categoryGroup parameter
+      if (!categoryGroup) {
+        console.error('CategoryGroup is undefined or null');
+        return;
+      }
+
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.error('No auth token found');
+        return;
+      }
+
+      const response = await fetch('http://localhost:8000/api/categories/', {
+        headers: {
+          'Authorization': `Token ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const categories = data.results || data; // Handle both paginated and non-paginated responses
+        const select = categoryGroup.querySelector('select') as HTMLSelectElement;
+        
+        if (!select) {
+          console.error('Select element not found in category group');
+          return;
+        }
+        
+        // Clear existing options
+        select.innerHTML = '';
+        
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select a category...';
+        select.appendChild(defaultOption);
+        
+        // Add category options
+        if (Array.isArray(categories)) {
+          categories.forEach((category: any) => {
+            const option = document.createElement('option');
+            option.value = category.id.toString();
+            option.textContent = category.name;
+            select.appendChild(option);
+          });
+          console.log(`Loaded ${categories.length} categories successfully`);
+        } else {
+          console.error('Categories is not an array:', categories);
+        }
+      } else {
+        console.error('Failed to load categories:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error loading categories:', error);
     }
   }
 

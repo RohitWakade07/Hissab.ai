@@ -53,7 +53,44 @@ class ExpenseSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User must be associated with a company to create expenses.")
         
         validated_data['company'] = user.company
-        return super().create(validated_data)
+        
+        # Create the expense
+        expense = super().create(validated_data)
+        
+        # Apply conditional approval logic
+        try:
+            from approvals.conditional_service import ConditionalApprovalService
+            conditional_service = ConditionalApprovalService()
+            approval_info = conditional_service.determine_approval_requirements(expense)
+            
+            # Update expense status based on conditional logic
+            if approval_info['status'] == 'AUTO_APPROVED':
+                expense.status = 'APPROVED'
+                expense.approved_at = expense.created_at
+            elif approval_info['status'] == 'REJECTED':
+                expense.status = 'REJECTED'
+            elif approval_info['status'] == 'ESCALATED':
+                expense.status = 'PENDING'
+                # Could set a special flag for escalation
+            else:
+                expense.status = 'PENDING'
+            
+            expense.save()
+            
+            # Store approval info for frontend
+            expense._approval_info = approval_info
+            
+        except Exception as e:
+            # If conditional logic fails, default to pending
+            expense.status = 'PENDING'
+            expense.save()
+            expense._approval_info = {
+                'status': 'PENDING_APPROVAL',
+                'reason': 'Manual review required',
+                'fallback': True
+            }
+        
+        return expense
     
     def validate_amount(self, value):
         """Validate expense amount"""

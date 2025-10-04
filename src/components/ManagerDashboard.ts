@@ -218,8 +218,9 @@ export class ManagerDashboard {
     const actions = [
       { title: 'View Team Expenses', description: 'See all team expense reports', icon: 'users', action: 'team-expenses' },
       { title: 'Approval History', description: 'Review past approvals', icon: 'fileText', action: 'approval-history' },
-      { title: 'Create Approval Flow', description: 'Set up new approval workflows', icon: 'settings', action: 'create-flow' },
-      { title: 'Conditional Rules', description: 'Manage percentage and specific approver rules', icon: 'zap', action: 'conditional-rules' }
+      { title: 'Conditional Rules', description: 'View approval rules and thresholds', icon: 'zap', action: 'conditional-rules' },
+      { title: 'Manage Employees', description: 'Add and manage employee accounts', icon: 'userPlus', action: 'manage-employees' },
+      { title: 'Create Approval Flow', description: 'Set up new approval workflows', icon: 'settings', action: 'create-flow' }
     ];
 
     actions.forEach(action => {
@@ -478,19 +479,489 @@ export class ManagerDashboard {
       case 'conditional-rules':
         this.showConditionalRules();
         break;
+      case 'manage-employees':
+        this.showEmployeeManagement();
+        break;
       default:
         console.log('Unknown action:', action);
     }
   }
 
   private showTeamExpenses(): void {
-    // TODO: Implement team expenses view
-    alert('Team expenses view coming soon!');
+    const modal = document.createElement('div');
+    modal.className = 'team-expenses-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'team-expenses-modal-content';
+    modalContent.style.cssText = `
+      background-color: var(--background-medium);
+      border-radius: 12px;
+      padding: 2rem;
+      width: 90%;
+      max-width: 1200px;
+      max-height: 90vh;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      position: relative;
+    `;
+
+    // Close button
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '×';
+    closeButton.style.cssText = `
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: background-color 0.2s ease;
+    `;
+    closeButton.addEventListener('click', () => modal.remove());
+
+    // Title
+    const title = document.createElement('h2');
+    title.textContent = 'Team Expenses';
+    title.style.cssText = `
+      color: var(--text-primary);
+      margin: 0 0 1.5rem 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+    `;
+
+    // Loading state
+    const loadingDiv = document.createElement('div');
+    loadingDiv.textContent = 'Loading team expenses...';
+    loadingDiv.style.cssText = `
+      text-align: center;
+      color: var(--text-secondary);
+      padding: 2rem;
+    `;
+
+    modalContent.appendChild(closeButton);
+    modalContent.appendChild(title);
+    modalContent.appendChild(loadingDiv);
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    // Load team expenses
+    this.loadTeamExpenses(modalContent);
+  }
+
+  private async loadTeamExpenses(container: HTMLElement): Promise<void> {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('http://localhost:8000/api/team-expenses/', {
+        headers: {
+          'Authorization': `Token ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const expenses = await response.json();
+        this.renderTeamExpenses(container, expenses);
+      } else {
+        this.showTeamExpensesError(container, 'Failed to load team expenses');
+      }
+    } catch (error) {
+      console.error('Error loading team expenses:', error);
+      this.showTeamExpensesError(container, 'Network error. Please try again.');
+    }
+  }
+
+  private renderTeamExpenses(container: HTMLElement, expenses: any[]): void {
+    // Remove loading div
+    const loadingDiv = container.querySelector('div');
+    if (loadingDiv && loadingDiv.textContent?.includes('Loading')) {
+      loadingDiv.remove();
+    }
+
+    if (expenses.length === 0) {
+      const emptyState = document.createElement('div');
+      emptyState.style.cssText = `
+        text-align: center;
+        color: var(--text-secondary);
+        padding: 3rem;
+      `;
+      emptyState.innerHTML = `
+        <div style="margin-bottom: 1rem;">${IconUtils.createIconElement('users', 48, '#d1d5db').outerHTML}</div>
+        <h3 style="margin: 0 0 0.5rem 0; color: var(--text-primary);">No team expenses</h3>
+        <p style="margin: 0;">No expenses found for your team.</p>
+      `;
+      container.appendChild(emptyState);
+      return;
+    }
+
+    // Create expenses table
+    const table = document.createElement('table');
+    table.style.cssText = `
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    `;
+
+    // Table header
+    const headerRow = document.createElement('tr');
+    headerRow.style.cssText = `
+      background-color: var(--background-light);
+      border-bottom: 2px solid var(--border-color);
+    `;
+
+    const headers = ['Employee', 'Description', 'Date', 'Category', 'Amount', 'Status'];
+    headers.forEach(headerText => {
+      const th = document.createElement('th');
+      th.textContent = headerText;
+      th.style.cssText = `
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-primary);
+      `;
+      headerRow.appendChild(th);
+    });
+
+    table.appendChild(headerRow);
+
+    // Table rows
+    expenses.forEach(expense => {
+      const row = document.createElement('tr');
+      row.style.cssText = `
+        border-bottom: 1px solid var(--border-color);
+        transition: background-color 0.2s ease;
+      `;
+
+      row.addEventListener('mouseenter', () => {
+        row.style.backgroundColor = 'var(--background-light)';
+      });
+
+      row.addEventListener('mouseleave', () => {
+        row.style.backgroundColor = 'transparent';
+      });
+
+      const cells = [
+        `${expense.submitted_by?.first_name || 'Unknown'} ${expense.submitted_by?.last_name || ''}`,
+        expense.description || 'N/A',
+        new Date(expense.expense_date).toLocaleDateString(),
+        expense.category?.name || 'N/A',
+        `${expense.currency} ${parseFloat(expense.amount).toFixed(2)}`,
+        expense.status || 'N/A'
+      ];
+
+      cells.forEach(cellText => {
+        const td = document.createElement('td');
+        td.textContent = cellText;
+        td.style.cssText = `
+          padding: 1rem;
+          color: var(--text-primary);
+        `;
+        
+        if (cells.indexOf(cellText) === 5) { // Status column
+          const statusColor = this.getStatusColor(cellText);
+          td.style.color = statusColor;
+          td.style.fontWeight = '500';
+        }
+        
+        row.appendChild(td);
+      });
+
+      table.appendChild(row);
+    });
+
+    container.appendChild(table);
+  }
+
+  private showTeamExpensesError(container: HTMLElement, message: string): void {
+    // Remove loading div
+    const loadingDiv = container.querySelector('div');
+    if (loadingDiv && loadingDiv.textContent?.includes('Loading')) {
+      loadingDiv.remove();
+    }
+
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+      text-align: center;
+      color: #e74c3c;
+      padding: 2rem;
+    `;
+    errorDiv.innerHTML = `
+      <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+      <h3 style="margin: 0 0 0.5rem 0;">Error</h3>
+      <p style="margin: 0;">${message}</p>
+    `;
+    container.appendChild(errorDiv);
   }
 
   private showApprovalHistory(): void {
-    // TODO: Implement approval history view
-    alert('Approval history view coming soon!');
+    const modal = document.createElement('div');
+    modal.className = 'approval-history-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'approval-history-modal-content';
+    modalContent.style.cssText = `
+      background-color: var(--background-medium);
+      border-radius: 12px;
+      padding: 2rem;
+      width: 90%;
+      max-width: 1200px;
+      max-height: 90vh;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      position: relative;
+    `;
+
+    // Close button
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '×';
+    closeButton.style.cssText = `
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: background-color 0.2s ease;
+    `;
+    closeButton.addEventListener('click', () => modal.remove());
+
+    // Title
+    const title = document.createElement('h2');
+    title.textContent = 'Approval History';
+    title.style.cssText = `
+      color: var(--text-primary);
+      margin: 0 0 1.5rem 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+    `;
+
+    // Loading state
+    const loadingDiv = document.createElement('div');
+    loadingDiv.textContent = 'Loading approval history...';
+    loadingDiv.style.cssText = `
+      text-align: center;
+      color: var(--text-secondary);
+      padding: 2rem;
+    `;
+
+    modalContent.appendChild(closeButton);
+    modalContent.appendChild(title);
+    modalContent.appendChild(loadingDiv);
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    // Load approval history
+    this.loadApprovalHistory(modalContent);
+  }
+
+  private async loadApprovalHistory(container: HTMLElement): Promise<void> {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('http://localhost:8000/api/general-approval-history/', {
+        headers: {
+          'Authorization': `Token ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const history = await response.json();
+        this.renderApprovalHistory(container, history);
+      } else {
+        this.showApprovalHistoryError(container, 'Failed to load approval history');
+      }
+    } catch (error) {
+      console.error('Error loading approval history:', error);
+      this.showApprovalHistoryError(container, 'Network error. Please try again.');
+    }
+  }
+
+  private renderApprovalHistory(container: HTMLElement, history: any[]): void {
+    // Remove loading div
+    const loadingDiv = container.querySelector('div');
+    if (loadingDiv && loadingDiv.textContent?.includes('Loading')) {
+      loadingDiv.remove();
+    }
+
+    if (history.length === 0) {
+      const emptyState = document.createElement('div');
+      emptyState.style.cssText = `
+        text-align: center;
+        color: var(--text-secondary);
+        padding: 3rem;
+      `;
+      emptyState.innerHTML = `
+        <div style="margin-bottom: 1rem;">${IconUtils.createIconElement('fileText', 48, '#d1d5db').outerHTML}</div>
+        <h3 style="margin: 0 0 0.5rem 0; color: var(--text-primary);">No approval history</h3>
+        <p style="margin: 0;">No approval history found.</p>
+      `;
+      container.appendChild(emptyState);
+      return;
+    }
+
+    // Create history table
+    const table = document.createElement('table');
+    table.style.cssText = `
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    `;
+
+    // Table header
+    const headerRow = document.createElement('tr');
+    headerRow.style.cssText = `
+      background-color: var(--background-light);
+      border-bottom: 2px solid var(--border-color);
+    `;
+
+    const headers = ['Expense', 'Employee', 'Amount', 'Action', 'Date', 'Comments'];
+    headers.forEach(headerText => {
+      const th = document.createElement('th');
+      th.textContent = headerText;
+      th.style.cssText = `
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-primary);
+      `;
+      headerRow.appendChild(th);
+    });
+
+    table.appendChild(headerRow);
+
+    // Table rows
+    history.forEach(approval => {
+      const row = document.createElement('tr');
+      row.style.cssText = `
+        border-bottom: 1px solid var(--border-color);
+        transition: background-color 0.2s ease;
+      `;
+
+      row.addEventListener('mouseenter', () => {
+        row.style.backgroundColor = 'var(--background-light)';
+      });
+
+      row.addEventListener('mouseleave', () => {
+        row.style.backgroundColor = 'transparent';
+      });
+
+      const cells = [
+        approval.expense?.description || 'N/A',
+        `${approval.expense?.submitted_by?.first_name || 'Unknown'} ${approval.expense?.submitted_by?.last_name || ''}`,
+        `${approval.expense?.currency || 'USD'} ${parseFloat(approval.expense?.amount || 0).toFixed(2)}`,
+        approval.action || 'N/A',
+        new Date(approval.created_at).toLocaleDateString(),
+        approval.comments || 'N/A'
+      ];
+
+      cells.forEach((cellText, index) => {
+        const td = document.createElement('td');
+        td.textContent = cellText;
+        td.style.cssText = `
+          padding: 1rem;
+          color: var(--text-primary);
+        `;
+        
+        if (index === 3) { // Action column
+          const actionColor = cellText === 'APPROVED' ? '#10b981' : cellText === 'REJECTED' ? '#ef4444' : '#6b7280';
+          td.style.color = actionColor;
+          td.style.fontWeight = '500';
+        }
+        
+        row.appendChild(td);
+      });
+
+      table.appendChild(row);
+    });
+
+    container.appendChild(table);
+  }
+
+  private showApprovalHistoryError(container: HTMLElement, message: string): void {
+    // Remove loading div
+    const loadingDiv = container.querySelector('div');
+    if (loadingDiv && loadingDiv.textContent?.includes('Loading')) {
+      loadingDiv.remove();
+    }
+
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+      text-align: center;
+      color: #e74c3c;
+      padding: 2rem;
+    `;
+    errorDiv.innerHTML = `
+      <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+      <h3 style="margin: 0 0 0.5rem 0;">Error</h3>
+      <p style="margin: 0;">${message}</p>
+    `;
+    container.appendChild(errorDiv);
+  }
+
+  private getStatusColor(status: string): string {
+    const colors: { [key: string]: string } = {
+      'DRAFT': '#95a5a6',
+      'PENDING': '#f39c12',
+      'APPROVED': '#27ae60',
+      'REJECTED': '#e74c3c',
+      'PAID': '#3498db'
+    };
+    return colors[status] || '#95a5a6';
+  }
+
+  private showEmployeeManagement(): void {
+    // Import and use the AdminEmployeeManagement component
+    import('./AdminEmployeeManagement').then(({ AdminEmployeeManagement }) => {
+      const employeeManagement = new AdminEmployeeManagement({
+        onClose: () => {
+          employeeManagement.destroy();
+        },
+        currentUser: this.user
+      });
+      
+      employeeManagement.render(document.body);
+    }).catch(error => {
+      console.error('Failed to load AdminEmployeeManagement:', error);
+      // Fallback to simple alert
+      alert('Employee management feature is not available. Please contact system administrator.');
+    });
   }
 
   private showCreateFlow(): void {
@@ -499,60 +970,25 @@ export class ManagerDashboard {
   }
 
   private showConditionalRules(): void {
-    // Show conditional approval manager
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    `;
-
-    const modalContent = document.createElement('div');
-    modalContent.style.cssText = `
-      background: white;
-      border-radius: 12px;
-      width: 90%;
-      max-width: 1200px;
-      max-height: 90vh;
-      overflow-y: auto;
-      position: relative;
-    `;
-
-    const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '×';
-    closeBtn.style.cssText = `
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      background: #ef4444;
-      color: white;
-      border: none;
-      width: 2rem;
-      height: 2rem;
-      border-radius: 50%;
-      cursor: pointer;
-      font-size: 1.2rem;
-      z-index: 1001;
-    `;
-
-    closeBtn.addEventListener('click', () => {
-      document.body.removeChild(modal);
+    // Import and use the new ConditionalApprovalRules component
+    import('./ConditionalApprovalRules').then(({ ConditionalApprovalRules }) => {
+      const conditionalRules = new ConditionalApprovalRules({
+        onClose: () => {
+          conditionalRules.destroy();
+        }
+      });
+      
+      conditionalRules.render(document.body);
+    }).catch(error => {
+      console.error('Failed to load ConditionalApprovalRules:', error);
+      // Fallback to simple alert
+      alert('Conditional approval rules:\n\n' +
+        '≤ ₹5,000: Auto approved\n' +
+        '₹5,001 - ₹25,000: Department Manager\n' +
+        '₹25,001 - ₹1,00,000: Finance Head\n' +
+        '> ₹1,00,000: Managing Director\n\n' +
+        'Escalation required for: personal, entertainment, unlisted vendor categories');
     });
-
-    modalContent.appendChild(closeBtn);
-    modal.appendChild(modalContent);
-
-    // Initialize conditional approval manager
-    new ConditionalApprovalManager(this.user, modalContent);
-
-    document.body.appendChild(modal);
   }
 
   private showSuccessMessage(message: string): void {

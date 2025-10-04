@@ -68,15 +68,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 class UserLoginSerializer(serializers.Serializer):
-    """Serializer for user login"""
+    """Serializer for user login with company validation"""
     
     username = serializers.CharField()
     password = serializers.CharField()
+    company_id = serializers.CharField(required=False)
     
     def validate(self, attrs):
-        """Validate user credentials"""
+        """Validate user credentials and company"""
         username = attrs.get('username')
         password = attrs.get('password')
+        company_id = attrs.get('company_id')
         
         if username and password:
             user = authenticate(username=username, password=password)
@@ -84,6 +86,19 @@ class UserLoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError('Invalid credentials.')
             if not user.is_active:
                 raise serializers.ValidationError('User account is disabled.')
+            
+            # Validate company if provided
+            if company_id:
+                try:
+                    from companies.models import Company
+                    company = Company.objects.get(id=company_id)
+                    if user.company != company:
+                        raise serializers.ValidationError('User does not belong to the specified company.')
+                except:
+                    raise serializers.ValidationError('Invalid company ID.')
+            elif not user.company:
+                raise serializers.ValidationError('User must belong to a company. Please provide company ID.')
+            
             attrs['user'] = user
         else:
             raise serializers.ValidationError('Must include username and password.')

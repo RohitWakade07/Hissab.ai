@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import super_user_views
 
 app_name = 'users'
 
@@ -32,4 +33,10 @@ urlpatterns = [
     
     # Manager endpoints
     path('manager/team-users/', views.manager_team_users, name='manager_team_users'),
+    
+    # Super User endpoints
+    path('super-user/companies/', super_user_views.super_user_companies, name='super_user_companies'),
+    path('super-user/companies/create/', super_user_views.super_user_create_company, name='super_user_create_company'),
+    path('super-user/system-users/', super_user_views.super_user_system_users, name='super_user_system_users'),
+    path('super-user/system-analytics/', super_user_views.super_user_system_analytics, name='super_user_system_analytics'),
 ]

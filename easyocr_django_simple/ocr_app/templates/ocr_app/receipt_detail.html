@@ -1,0 +1,144 @@
+<!-- ocr_app/templates/ocr_app/receipt_detail.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt Details - {{ receipt.id }}</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; line-height: 1.6; background-color: #f4f7f6; color: #333; }
+        .container { max-width: 800px; margin: 40px auto; padding: 30px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #2c3e50; margin-bottom: 15px; }
+        .section { margin-bottom: 30px; padding: 15px; border: 1px solid #eee; border-radius: 5px; background-color: #fdfdfd; }
+        .section-header { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+        pre { background-color: #ecf0f1; padding: 15px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; font-size: 0.9em; border: 1px solid #ddd; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
+        th { background-color: #e9ecef; color: #34495e; font-weight: bold; }
+        td:first-child { font-weight: bold; width: 30%; }
+        .error-message { color: #e74c3c; font-weight: bold; padding: 10px; background-color: #fcecec; border-left: 5px solid #e74c3c; margin-top: 20px; }
+        .success-message { color: #27ae60; font-weight: bold; padding: 10px; background-color: #eaf7ed; border-left: 5px solid #27ae60; margin-top: 20px; }
+        .status-badge { display: inline-block; padding: 5px 10px; border-radius: 4px; font-size: 0.8em; font-weight: bold; color: #fff; }
+        .status-pending { background-color: #f39c12; }
+        .status-processed { background-color: #28a745; }
+        .status-error { background-color: #dc3545; }
+        .status-file_error { background-color: #dc3545; }
+        .status-llm_error { background-color: #dc3545; }
+        .status-processing_error { background-color: #dc3545; }
+        .back-link { display: inline-block; margin-top: 30px; text-decoration: none; background-color: #6c757d; color: white; padding: 10px 20px; border-radius: 5px; transition: background-color 0.3s ease; }
+        .back-link:hover { background-color: #5a6268; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Receipt Details</h1>
+        
+        <div class="section">
+            <h2 class="section-header">Receipt ID: {{ receipt.id }} <span class="status-badge status-{{ receipt.status }}">{{ receipt.status|upper }}</span></h2>
+            {% if receipt.receipt_image and image_available %}
+                <h3>Original Image:</h3>
+                <p><img id="receipt-image" src="{{ receipt.receipt_image.url }}" alt="Uploaded Receipt" style="max-width: 100%; height: auto; border: 1px solid #ccc;" onload="scheduleImageCleanup()"></p>
+            {% elif receipt.receipt_image %}
+                <h3>Original Image:</h3>
+                <p><em>Image was processed and removed for storage efficiency.</em></p>
+            {% endif %}
+            <h3>OCR Extracted Text:</h3>
+            <pre>{{ receipt.original_ocr_text }}</pre>
+        </div>
+
+        {% if receipt.status == 'processed' and expense_entry %}
+            <div class="section success-message">
+                <h2 class="section-header">Receipt Processing Complete!</h2>
+                {% if 'simple rule-based parser' in receipt.llm_output_raw %}
+                    <p><em>✅ Processed using simple parser - no external API calls required!</em></p>
+                {% elif 'LLM processing temporarily disabled' in receipt.llm_output_raw %}
+                    <p><em>Note: LLM processing is temporarily disabled. Showing basic OCR results only.</em></p>
+                {% elif 'quota exceeded' in receipt.llm_error_message|lower %}
+                    <p><em>Note: OpenAI API quota exceeded. Showing OCR text extraction only. Please check your billing or try a different API key.</em></p>
+                {% else %}
+                    <h3>LLM Extraction Successful!</h3>
+                {% endif %}
+                <h3>Extracted Expense Parameters:</h3>
+                <table>
+                    <tr><td>Date</td><td>{{ expense_entry.date|default:"-" }}</td></tr>
+                    <tr><td>Time</td><td>{{ expense_entry.time|default:"-" }}</td></tr>
+                    <tr><td>Payer Name</td><td>{{ expense_entry.payer_name|default:"-" }}</td></tr>
+                    <tr><td>Receiver Name</td><td>{{ expense_entry.receiver_name|default:"-" }}</td></tr>
+                    <tr><td>Amount</td><td>{{ expense_entry.amount|default:"-" }} {{ expense_entry.currency|default:"-" }}</td></tr>
+                    <tr><td>Type of Expense</td><td>{{ expense_entry.type_of_expense|default:"-" }}</td></tr>
+                    <tr><td>Mode of Payment</td><td>{{ expense_entry.mode_of_payment|default:"-" }}</td></tr>
+                    <tr><td>UPI Transaction ID</td><td>{{ expense_entry.upi_transaction_id|default:"-" }}</td></tr>
+                    <tr><td>Money Used For</td><td>{{ expense_entry.money_used_for|default:"-" }}</td></tr>
+                    <tr><td>Receipt ID / Invoice No.</td><td>{{ expense_entry.receipt_number|default:"-" }}</td></tr>
+                    <tr><td>GST No.</td><td>{{ expense_entry.gst_no|default:"-" }}</td></tr>
+                    <tr><td>Is Reimbursable?</td><td>{{ expense_entry.is_reimbursable|yesno:"Yes,No,Unknown" }}</td></tr>
+                    <tr><td>Project Code / Department</td><td>{{ expense_entry.project_code|default:"-" }}</td></tr>
+                    <tr><td>Location / City</td><td>{{ expense_entry.location|default:"-" }}</td></tr>
+                    {% if expense_entry.type_of_expense == 'Travel' or expense_entry.travel_mode %}
+                        <tr><td colspan="2"><h3>Travel Details</h3></td></tr>
+                        <tr><td>Travel Mode</td><td>{{ expense_entry.travel_mode|default:"-" }}</td></tr>
+                        <tr><td>Travel Dates</td><td>{% if expense_entry.travel_start_date %}{{ expense_entry.travel_start_date }}{% endif %} - {% if expense_entry.travel_end_date %}{{ expense_entry.travel_end_date }}{% endif %}</td></tr>
+                        <tr><td>Origin</td><td>{{ expense_entry.travel_origin|default:"-" }}</td></tr>
+                        <tr><td>Destination</td><td>{{ expense_entry.travel_destination|default:"-" }}</td></tr>
+                        <tr><td>Flight/Train No.</td><td>{{ expense_entry.flight_number|default:expense_entry.train_number|default:"-" }}</td></tr>
+                        <tr><td>Airline/Company</td><td>{{ expense_entry.airline|default:expense_entry.train_company|default:"-" }}</td></tr>
+                        <tr><td>Ticket No.</td><td>{{ expense_entry.ticket_number|default:"-" }}</td></tr>
+                        <tr><td>Lodging Name</td><td>{{ expense_entry.lodging_name|default:"-" }}</td></tr>
+                        <tr><td>Lodging Check-in/out</td><td>{% if expense_entry.lodging_check_in %}{{ expense_entry.lodging_check_in }}{% endif %} - {% if expense_entry.lodging_check_out %}{{ expense_entry.lodging_check_out }}{% endif %}</td></tr>
+                        <tr><td>Rental Car Company</td><td>{{ expense_entry.rental_car_company|default:"-" }}</td></tr>
+                        <tr><td>Rental Car Pickup/Dropoff</td><td>{% if expense_entry.rental_car_pickup %}{{ expense_entry.rental_car_pickup }}{% endif %} - {% if expense_entry.rental_car_dropoff %}{{ expense_entry.rental_car_dropoff }}{% endif %}</td></tr>
+                        <tr><td>Mileage</td><td>{{ expense_entry.mileage|default:"-" }}</td></tr>
+                        <tr><td>Reason for Travel</td><td>{{ expense_entry.reason_for_travel|default:"-" }}</td></tr>
+                    {% endif %}
+                </table>
+            </div>
+            <div class="section">
+                <h3>Raw LLM Output (JSON)</h3>
+                <pre>{{ receipt.llm_output_raw|default:"No raw LLM output." }}</pre>
+            </div>
+        {% elif receipt.status in 'error,failed,llm_error,processing_error,file_error' %}
+            <div class="section error-message">
+                <h2 class="section-header">LLM Extraction Failed or Encountered Error</h2>
+                <p>Status: {{ receipt.status|upper }}</p>
+                {% if receipt.llm_error_message %}
+                    <h3>Error Details:</h3>
+                    <pre>{{ receipt.llm_error_message }}</pre>
+                {% endif %}
+                {% if receipt.llm_output_raw %}
+                    <h3>Partial/Raw LLM Output (if any):</h3>
+                    <pre>{{ receipt.llm_output_raw }}</pre>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="section">
+                <h2 class="section-header">Processing Status: {{ receipt.status|upper }}</h2>
+                <p>Receipt is being processed. Please check back later.</p>
+            </div>
+        {% endif %}
+
+        <a href="{% url 'upload_image' %}" class="back-link">Upload Another Receipt</a>
+    </div>
+
+    <script>
+        function scheduleImageCleanup() {
+            // Schedule cleanup after 5 seconds to allow the image to load and be viewed
+            setTimeout(function() {
+                // Make a request to clean up the image file
+                fetch('{% url "cleanup_image" receipt.id %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/json',
+                    },
+                }).then(response => {
+                    if (response.ok) {
+                        console.log('Image cleanup completed');
+                    }
+                }).catch(error => {
+                    console.log('Image cleanup failed:', error);
+                });
+            }, 5000); // 5 second delay
+        }
+    </script>
+</body>
+</html>

@@ -80,6 +80,8 @@ export class Login {
       gap: 1rem;
     `;
 
+    // Company ID field
+    const companyIdGroup = this.createInputGroup('company_id', 'Company ID', 'text', true);
     // Username field
     const usernameGroup = this.createInputGroup('username', 'Username', 'text', true);
     const passwordGroup = this.createInputGroup('password', 'Password', 'password', true);
@@ -126,6 +128,7 @@ export class Login {
       display: none;
     `;
 
+    form.appendChild(companyIdGroup);
     form.appendChild(usernameGroup);
     form.appendChild(passwordGroup);
     form.appendChild(submitButton);
@@ -194,6 +197,7 @@ export class Login {
     const loginData: LoginFormData = {
       username: formData.get('username') as string,
       password: formData.get('password') as string,
+      company_id: formData.get('company_id') as string,
     };
 
     // Show loading state
